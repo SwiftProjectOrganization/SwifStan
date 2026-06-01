@@ -10,7 +10,9 @@ This file is a forward-looking checklist of work that's planned but not yet sche
 
 - [x] ✅ **Multivariate hierarchical priors** (McElreath Chapter 14 cafe-style) — shipped 2026-05-31. Adds `LKJCorrCholeskyPrior` (`cholesky_factor_corr[J]` + `lkj_corr_cholesky(η)`), `VaryingVectorPrior` (`array[N_group] vector[J]`), the `.multivariateNormalCholesky` and `.lkjCorrCholesky` distributions, chained-indexed RHS shape (`ab[cafe][k]`), and a `diag_pre_multiply` symbol-tokenising path. End-to-end cafe test recovers true parameters with R-hat ≤ 1.05.
 
-- [ ] `dlkjcorr` / `dwishart` priors on covariance / correlation matrices.
+- [x] ✅ **`dwishart` prior** — shipped 2026-06-01. Adds `WishartPrior("Omega", dim: "K", nu: "nu", V: "V_scale")` DSL node, `.wishart` Distribution case, `wishartPrior` Statement case, and `wishartScaleColumns` exclusion from Phase-6 cardinality binding so `realCovMatrix` scale-matrix data columns aren't mistaken for cardinality anchors.
+
+- [ ] **`dlkjcorr` alist alias** — when alist support lands, map `dlkjcorr(eta)` in `.alist.R` files to the existing `LKJCorrCholeskyPrior` statement (no new DSL node needed; the Cholesky form is the preferred Stan idiom).
 
 - [ ] Gaussian process priors.
 
@@ -24,7 +26,7 @@ This file is a forward-looking checklist of work that's planned but not yet sche
 
 - [ ] Nested groupings (`a[country, region]` style). Slightly different from two-grouping above; involves multi-dimensional index columns.
 
-- [ ] Crossed random effects with correlations (needs `dlkjcorr`).
+- [ ] Crossed random effects with correlations — `LKJCorrCholeskyPrior` + `VaryingVectorPrior` are already in place; what remains is the multi-grouping index wiring and any alist-side `dlkjcorr` alias (see above).
 
 
 ## 2. Known limitations / polish (any time)
