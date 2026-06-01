@@ -92,6 +92,10 @@ enum BlockEmitter {
       case .realCovMatrix:
         if let symbol = inferred.phaseSixColumnSymbols[name] {
           lines.append("  cov_matrix[\(symbol)] \(name);")
+        } else if let dim = inferred.wishartScaleColumns[name] {
+          // Wishart scale matrix: bound by the companion WishartPrior's
+          // dim symbol rather than a Phase-6 cardinality symbol.
+          lines.append("  cov_matrix[\(dim)] \(name);")
         }
       case .real, .integer, .realArrayVector, .realMatrix:
         break // unreachable here; partitioned by isVector
@@ -313,6 +317,12 @@ enum BlockEmitter {
                                        distribution: .lkjCorrCholesky(eta),
                                        truncation: .none,
                                        useLpdf: false))
+      case .wishartPrior(let name, _, let nu, let V):
+        // Wishart prior on a cov_matrix parameter.
+        priors.append(try emitSampling(lhs: name,
+                                       distribution: .wishart(nu, V),
+                                       truncation: .none,
+                                       useLpdf: false))
       case .varyingVectorPrior(let name, _, _, _, let dist, let trunc, let useLpdf):
         // Multivariate hierarchical priors Slice C: emit the scalar
         // sampling line. Stan vectorises `~` over the outer array
@@ -440,7 +450,7 @@ enum BlockEmitter {
                                    knownDataVectors: knownDataVectors)
     case .likelihood, .prior, .varyingPrior, .vectorPrior,
          .matrixPrior, .covMatrixPrior, .lkjCorrCholeskyPrior,
-         .varyingVectorPrior:
+         .wishartPrior, .varyingVectorPrior:
       // Distribution args are scalars in the current AST (literal or
       // symbol). For varying / vector / matrix / cov_matrix /
       // chol-factor / varying-vector priors, the LHS is a vector- or
@@ -748,8 +758,9 @@ enum BlockEmitter {
     case .varyingPrior(let name, _, _, _, _, _, _): return name
     case .vectorPrior(let name, _, _, _, _):  return name
     case .matrixPrior(let name, _, _, _, _, _): return name
-    case .covMatrixPrior(let name, _):        return name
+    case .covMatrixPrior(let name, _):           return name
     case .lkjCorrCholeskyPrior(let name, _, _): return name
+    case .wishartPrior(let name, _, _, _):       return name
     case .varyingVectorPrior(let name, _, _, _, _, _, _): return name
     case .link(_, let lhs, _):                return lhs
     case .deterministic(let lhs, _):          return lhs

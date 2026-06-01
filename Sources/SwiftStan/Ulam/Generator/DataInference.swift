@@ -76,6 +76,10 @@ struct InferredModel {
   /// declares `cholesky_factor_corr[<dim>] <name>;` in `parameters {}`
   /// and emits `<name> ~ lkj_corr_cholesky(<eta>);` in the model block.
   let cholFactorParameters: [String: String]
+  /// Wishart scale-matrix columns: data column name → the `dim`
+  /// cardinality symbol of the companion `WishartPrior`. BlockEmitter
+  /// emits `cov_matrix[<dim>] <name>;` for each entry in the data block.
+  let wishartScaleColumns: [String: String]
   /// Multivariate hierarchical priors Slice C: parameter name →
   /// (outer-array cardinality symbol, inner-vector length symbol) for
   /// every `VaryingVectorPrior`. BlockEmitter declares
@@ -171,6 +175,12 @@ enum DataInference {
     // the `to_vector(name) ~ dist(args);` prior (matrix only).
     var matrixParameters: [String: (rows: String, cols: String)] = [:]
     var covMatrixParameters: [String: String] = [:]
+    // Wishart scale-matrix columns: realCovMatrix data columns used as
+    // the `V` arg of a WishartPrior. Excluded from Phase-6 cardinality
+    // binding — they're pure data inputs, not cardinality anchors.
+    // Maps column name → dim cardinality symbol from the WishartPrior.
+    var wishartScaleColumns: Set<String> = []
+    var wishartScaleColumnDims: [String: String] = [:]
     // Multivariate hierarchical priors Slice A: cholesky_factor_corr
     // parameter bookkeeping. Filled during the statement walk; consumed
     // by BlockEmitter.parametersBlock for declarations and modelBlock
@@ -299,6 +309,23 @@ enum DataInference {
         cholFactorParameters[name] = dim
         referenced.insert(dim)
         if case .symbol(let s) = eta { referenced.insert(s) }
+      case .wishartPrior(let name, let dim, let nu, let V):
+        // Wishart prior on a cov_matrix parameter. Shares the
+        // covMatrixParameters dict with covMatrixPrior so the
+        // parameters block emits `cov_matrix[dim] name;` for free.
+        if !parameters.contains(name) { parameters.append(name) }
+        covMatrixParameters[name] = dim
+        referenced.insert(dim)
+        if case .symbol(let s) = nu { referenced.insert(s) }
+        if case .symbol(let s) = V  {
+          referenced.insert(s)
+          // Map scale-matrix column → dim symbol so BlockEmitter can
+          // emit `cov_matrix[<dim>] <col>;` in the data block.
+          // Also exclude it from Phase-6 cardinality binding — it's a
+          // pure data input, not a cardinality anchor.
+          wishartScaleColumns.insert(s)
+          wishartScaleColumnDims[s] = dim
+        }
       case .varyingVectorPrior(let name, let indexedBy, let length, let countSymbol, let dist, let trunc, _):
         // Multivariate hierarchical priors Slice C: vector-valued
         // varying effects with a multivariate prior. Declares
@@ -380,7 +407,9 @@ enum DataInference {
     // adds a `countSymbol:` override on the column).
     var phaseSixCardinalitySymbols: [String: Int] = [:]
     var phaseSixColumnSymbols: [String: String] = [:]
-    let phaseSixColumns = (vectors + scalars).filter { $0.1.innerLength != nil }
+    let phaseSixColumns = (vectors + scalars).filter {
+      $0.1.innerLength != nil && !wishartScaleColumns.contains($0.0)
+    }
     if !phaseSixColumns.isEmpty {
       if phaseSixSymbolsDeclared.count > 1 {
         throw DataInferenceError.multipleCardinalitySymbolsAmbiguous(
@@ -457,6 +486,7 @@ enum DataInference {
       matrixParameters: matrixParameters,
       covMatrixParameters: covMatrixParameters,
       cholFactorParameters: cholFactorParameters,
+      wishartScaleColumns: wishartScaleColumnDims,
       varyingVectorParameters: varyingVectorParameters
     )
   }

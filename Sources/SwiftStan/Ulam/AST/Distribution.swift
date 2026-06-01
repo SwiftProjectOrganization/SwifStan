@@ -69,4 +69,8 @@ public enum Distribution: Hashable, Sendable {
   // discovered by tokenisation in DistributionCatalog so the
   // generator doesn't flag them as undeclared.
   case multivariateNormalCholesky(_ mean: DistributionArg, _ chol: DistributionArg)
+  // Wishart prior on a covariance matrix (`cov_matrix[dim]`).
+  // `nu` is degrees of freedom (must be > dim - 1); `V` is the
+  // scale matrix symbol (typically a `cov_matrix`-typed data column).
+  case wishart(_ nu: DistributionArg, _ V: DistributionArg)
 }

@@ -94,6 +94,15 @@ public enum Statement: Hashable, Sendable {
                             dim: String,
                             eta: DistributionArg)
 
+  /// `cov_matrix[<dim>] <name>;` parameter with a Wishart prior.
+  /// Emits `<name> ~ wishart(<nu>, <V>);` in the model block.
+  /// `dim` is a cardinality symbol bound to a scalar-int data column.
+  /// `V` is a symbol referencing a `cov_matrix`-typed data column.
+  case wishartPrior(name: String,
+                    dim: String,
+                    nu: DistributionArg,
+                    V: DistributionArg)
+
   /// Multivariate hierarchical priors Slice C (2026-05-31):
   /// `array[N_<indexedBy>] vector[<length>] <name>;` parameter — vector-
   /// valued varying effects, one J-dim vector per group. `indexedBy` is

@@ -187,6 +187,8 @@ internal enum AlistClassify {
       return sym(eta)
     case .multivariateNormalCholesky(let mean, let chol):
       return sym(mean) + sym(chol)
+    case .wishart(let nu, let V):
+      return sym(nu) + sym(V)
     }
   }
 

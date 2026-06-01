@@ -148,6 +148,8 @@ internal struct AlistEmitter {
       return ".lkjCorrCholesky(\(renderArg(eta)))"
     case .multivariateNormalCholesky(let mean, let chol):
       return ".multivariateNormalCholesky(\(renderArg(mean)), \(renderArg(chol)))"
+    case .wishart(let nu, let V):
+      return ".wishart(\(renderArg(nu)), \(renderArg(V)))"
     }
   }
 

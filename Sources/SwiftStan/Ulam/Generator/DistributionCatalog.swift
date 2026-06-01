@@ -40,6 +40,7 @@ enum DistributionCatalog {
     case .multivariateNormal: return "multi_normal"
     case .lkjCorrCholesky: return "lkj_corr_cholesky"
     case .multivariateNormalCholesky: return "multi_normal_cholesky"
+    case .wishart: return "wishart"
     }
   }
 
@@ -62,6 +63,7 @@ enum DistributionCatalog {
     case .lkjCorrCholesky(let eta):         return "\(arg(eta))"
     case .multivariateNormalCholesky(let mean, let chol):
                                             return "\(arg(mean)), \(arg(chol))"
+    case .wishart(let nu, let V):           return "\(arg(nu)), \(arg(V))"
     }
   }
 
@@ -73,7 +75,7 @@ enum DistributionCatalog {
       return true
     case .normal, .beta, .exponential, .gamma, .cauchy, .lognormal, .uniform,
          .studentT, .multivariateNormal, .lkjCorrCholesky,
-         .multivariateNormalCholesky:
+         .multivariateNormalCholesky, .wishart:
       return false
     }
   }
@@ -86,7 +88,7 @@ enum DistributionCatalog {
   /// multivariate for the truncation-rejection purpose.
   static func isMultivariate(_ distribution: Distribution) -> Bool {
     switch distribution {
-    case .multivariateNormal, .lkjCorrCholesky, .multivariateNormalCholesky:
+    case .multivariateNormal, .lkjCorrCholesky, .multivariateNormalCholesky, .wishart:
       return true
     case .normal, .bernoulli, .binomial, .beta, .exponential, .poisson,
          .gamma, .cauchy, .lognormal, .uniform, .studentT:
@@ -125,6 +127,7 @@ enum DistributionCatalog {
     case .multivariateNormal(let a, let b): parts = [a, b]
     case .lkjCorrCholesky(let eta):         parts = [eta]
     case .multivariateNormalCholesky:       parts = [] // handled above
+    case .wishart(let nu, let V):           parts = [nu, V]
     }
     return parts.compactMap {
       if case .symbol(let s) = $0 { return s } else { return nil }
@@ -153,6 +156,8 @@ enum DistributionCatalog {
   private static let stanHelperBuiltins: Set<String> = [
     "diag_pre_multiply",
     "diag_post_multiply",
+    "diag_matrix",
+    "rep_vector",
     "cholesky_decompose",
     "quad_form_diag",
     "to_vector",
@@ -220,7 +225,7 @@ enum DistributionCatalog {
       return OutcomeBounds(lower: "0", upper: nil)
     case .normal, .beta, .exponential, .gamma, .cauchy,
          .lognormal, .uniform, .studentT, .multivariateNormal,
-         .lkjCorrCholesky, .multivariateNormalCholesky:
+         .lkjCorrCholesky, .multivariateNormalCholesky, .wishart:
       return OutcomeBounds(lower: nil, upper: nil)
     }
   }

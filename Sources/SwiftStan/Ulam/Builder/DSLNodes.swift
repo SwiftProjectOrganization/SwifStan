@@ -231,6 +231,35 @@ public struct LKJCorrCholeskyPrior: ModelStatement {
   }
 }
 
+/// Wishart prior on a `cov_matrix[<dim>]` parameter:
+///
+/// ```swift
+/// WishartPrior("Omega", dim: "K", nu: "nu", V: "V_scale")
+/// ```
+///
+/// Declares `cov_matrix[K] Omega;` in the parameters block and emits
+/// `Omega ~ wishart(nu, V_scale);` in the model block. `dim` is a
+/// cardinality symbol bound to a scalar-int data column; `V` is a symbol
+/// referencing a `cov_matrix`-typed data column (the scale matrix).
+public struct WishartPrior: ModelStatement {
+  public let name: String
+  public let dim: String
+  public let nu: DistributionArg
+  public let V: DistributionArg
+
+  public init(_ name: String, dim: String,
+              nu: DistributionArg, V: DistributionArg) {
+    self.name = name
+    self.dim = dim
+    self.nu = nu
+    self.V = V
+  }
+
+  public var statement: Statement {
+    .wishartPrior(name: name, dim: dim, nu: nu, V: V)
+  }
+}
+
 /// Multivariate hierarchical priors Slice C (2026-05-31):
 /// `array[N_<indexedBy>] vector[<length>] <name>;` — vector-valued
 /// varying effects with a multivariate prior over the per-group vector:
