@@ -37,8 +37,12 @@ enum BlockEmitter {
     }
     // Phase 5: cardinality declarations for index columns must come
     // before any data column that references them. Sorted by symbol for
-    // stable output.
-    let countSymbols = Set(inferred.indexColumns.values).sorted()
+    // stable output. `N` itself is already emitted above, so filter it
+    // out — GP-style group indices that key on `N` directly (oceanic
+    // tools: one observation per island) would otherwise duplicate it.
+    let countSymbols = Set(inferred.indexColumns.values)
+      .subtracting(["N"])
+      .sorted()
     for symbol in countSymbols {
       lines.append("  int<lower=1> \(symbol);")
     }
@@ -74,7 +78,14 @@ enum BlockEmitter {
         // column dimension is emitted as a literal — model-block
         // references that use a `K`/`J` cardinality symbol pick up
         // the matching scalar-int data the user supplied.
-        lines.append("  matrix[N, \(cols)] \(name);")
+        // GP override: distance matrices flagged by a
+        // GaussianProcessPrior emit as `matrix[N, N]` since they're
+        // square by construction.
+        if inferred.squareMatrixColumns.contains(name) {
+          lines.append("  matrix[N, N] \(name);")
+        } else {
+          lines.append("  matrix[N, \(cols)] \(name);")
+        }
       case .scalarReal, .scalarInt, .realVector, .realCovMatrix:
         break // unreachable here; partitioned out by DataInference
       }
@@ -148,12 +159,24 @@ enum BlockEmitter {
   /// for any non-centred VaryingPriors. Returns nil when the model
   /// has no non-centred entries — StanCodeGenerator skips the block
   /// entirely in that case so centred models stay byte-identical.
+  ///
+  /// 2026-06-01 — extended for `GaussianProcessPrior`: each GP entry
+  /// adds a `vector[<N>] <name>;` declaration plus a nested block that
+  /// builds the squared-exponential kernel matrix, adds the diagonal
+  /// jitter, and assigns `<name> = cholesky_decompose(K) * <name>_z;`.
   static func transformedParametersBlock(_ inferred: InferredModel) -> String? {
-    if inferred.nonCenteredVarying.isEmpty { return nil }
+    if inferred.nonCenteredVarying.isEmpty && inferred.gaussianProcessGP.isEmpty {
+      return nil
+    }
     var lines: [String] = ["transformed parameters {"]
-    // Sorted by original-name for stable output.
+    // Declarations first, then assignments. Sort each section by name
+    // for stable output.
     for name in inferred.nonCenteredVarying.keys.sorted() {
       let spec = inferred.nonCenteredVarying[name]!
+      lines.append("  vector[\(spec.countSymbol)] \(name);")
+    }
+    for name in inferred.gaussianProcessGP.keys.sorted() {
+      let spec = inferred.gaussianProcessGP[name]!
       lines.append("  vector[\(spec.countSymbol)] \(name);")
     }
     for name in inferred.nonCenteredVarying.keys.sorted() {
@@ -162,8 +185,33 @@ enum BlockEmitter {
       let sigma = DistributionCatalog.arg(spec.sigmaArg)
       lines.append("  \(name) = \(mu) + \(sigma) * \(spec.rawName);")
     }
+    for name in inferred.gaussianProcessGP.keys.sorted() {
+      let spec = inferred.gaussianProcessGP[name]!
+      let etasq = DistributionCatalog.arg(spec.etasq)
+      let rhosq = DistributionCatalog.arg(spec.rhosq)
+      let n = spec.countSymbol
+      lines.append("  {")
+      lines.append("    matrix[\(n), \(n)] K;")
+      lines.append("    for (i in 1:\(n)) {")
+      lines.append("      for (j in 1:\(n)) {")
+      lines.append("        K[i, j] = \(etasq) * exp(-\(rhosq) * square(\(spec.distanceMatrix)[i, j]));")
+      lines.append("      }")
+      lines.append("      K[i, i] = K[i, i] + \(renderJitter(spec.jitter));")
+      lines.append("    }")
+      lines.append("    \(name) = cholesky_decompose(K) * \(spec.rawName);")
+      lines.append("  }")
+    }
     lines.append("}")
     return lines.joined(separator: "\n")
+  }
+
+  /// Render the GP diagonal-jitter constant. `0.01` should render as
+  /// `0.01`, not `0.01000000…`. Whole-number doubles drop the `.0`
+  /// suffix only when an integer literal would parse identically in
+  /// Stan — Stan accepts both, but the McElreath idiom is the decimal
+  /// form (`0.01`).
+  private static func renderJitter(_ value: Double) -> String {
+    return "\(value)"
   }
 
   static func modelBlock(_ inferred: InferredModel,
@@ -204,6 +252,7 @@ enum BlockEmitter {
     // `transformed parameters` rather than declared in `parameters`.
     let knownVectorParameters = Set(inferred.vectorParameters.keys)
       .union(inferred.nonCenteredVarying.keys)
+      .union(inferred.gaussianProcessGP.keys)
     let knownIndexColumns = Set(inferred.indexColumns.keys)
     // Slice D: type-tracking input — which data columns end up as
     // `vector[N]` in the data block (real columns + Slice-C-promoted
@@ -329,6 +378,14 @@ enum BlockEmitter {
         // automatically.
         priors.append(try emitSampling(lhs: name, distribution: dist,
                                        truncation: trunc, useLpdf: useLpdf))
+      case .gaussianProcessPrior(let name, _, _, _, _, _):
+        // Gaussian process Slice D: the K-construction +
+        // cholesky_decompose lives in `transformed parameters`; the
+        // model block carries only the standard-normal prior on the
+        // raw z-vector.
+        if let spec = inferred.gaussianProcessGP[name] {
+          priors.append("  \(spec.rawName) ~ std_normal();")
+        }
       case .likelihood(let lhs, let dist, let trunc, let useLpdf):
         likelihoods.append(try emitSampling(lhs: lhs, distribution: dist,
                                             truncation: trunc, useLpdf: useLpdf))
@@ -450,11 +507,11 @@ enum BlockEmitter {
                                    knownDataVectors: knownDataVectors)
     case .likelihood, .prior, .varyingPrior, .vectorPrior,
          .matrixPrior, .covMatrixPrior, .lkjCorrCholeskyPrior,
-         .wishartPrior, .varyingVectorPrior:
+         .wishartPrior, .varyingVectorPrior, .gaussianProcessPrior:
       // Distribution args are scalars in the current AST (literal or
       // symbol). For varying / vector / matrix / cov_matrix /
-      // chol-factor / varying-vector priors, the LHS is a vector- or
-      // matrix-typed parameter and Stan vectorises the `~` operator
+      // chol-factor / varying-vector / GP priors, the LHS is a vector-
+      // or matrix-typed parameter and Stan vectorises the `~` operator
       // natively over the flattened form.
       return .vectorise
     }
@@ -762,6 +819,7 @@ enum BlockEmitter {
     case .lkjCorrCholeskyPrior(let name, _, _): return name
     case .wishartPrior(let name, _, _, _):       return name
     case .varyingVectorPrior(let name, _, _, _, _, _, _): return name
+    case .gaussianProcessPrior(let name, _, _, _, _, _):  return name
     case .link(_, let lhs, _):                return lhs
     case .deterministic(let lhs, _):          return lhs
     }

@@ -121,6 +121,26 @@ public enum Statement: Hashable, Sendable {
                           truncation: Truncation,
                           useLpdf: Bool)
 
+  /// Gaussian process prior (2026-06-01) on an N-length latent vector,
+  /// using the squared-exponential of a precomputed N×N distance matrix
+  /// (McElreath's `cov_GPL2`). v1 only supports the squared-exponential
+  /// kernel and the cardinality `N` (one observation per group). The
+  /// latent vector is declared in `transformed parameters` via the
+  /// non-centred form `<name> = cholesky_decompose(K) * <name>_z` with
+  /// `<name>_z` declared as a `vector[N]` parameter with a standard
+  /// normal prior. The K matrix is built inside a nested block using
+  /// `etasq * exp(-rhosq * square(<distanceMatrix>[i, j]))` plus a
+  /// fixed diagonal jitter. The user must supply scalar priors on the
+  /// hyperparameter symbols `etasq` / `rhosq` separately — by
+  /// convention these are positive (e.g. `Prior("etasq", .exponential(2),
+  /// truncation: Truncation(lower: 0))`).
+  case gaussianProcessPrior(name: String,
+                            indexedBy: String,
+                            distanceMatrix: String,
+                            etasq: DistributionArg,
+                            rhosq: DistributionArg,
+                            jitter: Double)
+
   /// `function(lhs) <- rhs` — deterministic assignment via an inverse link.
   case link(function: LinkFunction, lhs: String, rhs: Expression)
 

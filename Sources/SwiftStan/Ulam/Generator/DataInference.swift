@@ -87,6 +87,32 @@ struct InferredModel {
   /// emits the sampling line at the scalar form — Stan vectorises the
   /// `~` operator over the outer array automatically.
   let varyingVectorParameters: [String: (outer: String, length: String)]
+  /// Gaussian process priors (2026-06-01): latent-name → spec for every
+  /// `GaussianProcessPrior`. BlockEmitter declares `<name>` in
+  /// `transformed parameters {}` (built from `<rawName>` z-scores plus
+  /// the cholesky-decomposed kernel matrix), declares `<rawName>` in
+  /// `parameters {}`, and emits `<rawName> ~ std_normal();` in the
+  /// model block. Same role as `nonCenteredVarying` but extended with
+  /// the kernel-construction spec.
+  let gaussianProcessGP: [String: GPSpec]
+  /// Data columns the GP code-gen needs emitted as `matrix[N, N]`
+  /// instead of `matrix[N, <cols-literal>]`. Populated from each
+  /// `GaussianProcessPrior`'s `distanceMatrix` symbol.
+  let squareMatrixColumns: Set<String>
+}
+
+/// Gaussian process spec (2026-06-01): per-`GaussianProcessPrior`
+/// bookkeeping used by BlockEmitter to build the `transformed parameters`
+/// block (`vector[N] <name>;` plus the K-matrix construction and the
+/// `<name> = cholesky_decompose(K) * <rawName>;` assignment) and the
+/// `<rawName> ~ std_normal();` model-block prior.
+struct GPSpec: Hashable, Sendable {
+  let rawName: String           // "<name>_z"
+  let countSymbol: String       // "N"  (v1 hard-codes to the global row count)
+  let distanceMatrix: String    // e.g. "Dmat"
+  let etasq: DistributionArg
+  let rhosq: DistributionArg
+  let jitter: Double
 }
 
 /// Phase 5.5 Slice E: per-VaryingPrior bookkeeping for the Matt
@@ -191,6 +217,9 @@ enum DataInference {
     // group-count symbol from `indexedBy`) with the inner-vector
     // length symbol.
     var varyingVectorParameters: [String: (outer: String, length: String)] = [:]
+    // Gaussian process priors (2026-06-01).
+    var gaussianProcessGP: [String: GPSpec] = [:]
+    var squareMatrixColumns: Set<String> = []
 
     for statement in model.statements {
       switch statement {
@@ -342,6 +371,35 @@ enum DataInference {
         referenced.insert(length)
         for s in DistributionCatalog.symbolsReferenced(dist) { referenced.insert(s) }
         for s in DistributionCatalog.symbolsReferenced(trunc) { referenced.insert(s) }
+      case .gaussianProcessPrior(let name, let indexedBy, let distanceMatrix,
+                                 let etasq, let rhosq, let jitter):
+        // The latent vector `<name>` lives in `transformed parameters`,
+        // not `parameters` — mirror the non-centred-varying treatment
+        // (don't append to `parameters`, but register it on
+        // `gaussianProcessGP` so the known-non-data set picks it up
+        // and the transformed-params block emitter declares + builds
+        // it). The raw z-vector `<rawName>` is a real parameter.
+        let rawName = "\(name)_z"
+        let countSymbol = "N"
+        if !parameters.contains(rawName) { parameters.append(rawName) }
+        vectorParameters[rawName] = countSymbol
+        gaussianProcessGP[name] = GPSpec(
+          rawName: rawName,
+          countSymbol: countSymbol,
+          distanceMatrix: distanceMatrix,
+          etasq: etasq,
+          rhosq: rhosq,
+          jitter: jitter)
+        squareMatrixColumns.insert(distanceMatrix)
+        // Treat `indexedBy` as an integer index column ranging 1..N.
+        if let existing = indexColumns[indexedBy], existing != countSymbol {
+          throw DataInferenceError.conflictingIndexColumnCardinality(column: indexedBy)
+        }
+        indexColumns[indexedBy] = countSymbol
+        referenced.insert(indexedBy)
+        referenced.insert(distanceMatrix)
+        if case .symbol(let s) = etasq { referenced.insert(s) }
+        if case .symbol(let s) = rhosq { referenced.insert(s) }
       case .link(_, let lhs, let rhs):
         if !derived.contains(lhs) { derived.append(lhs) }
         for s in symbolsIn(rhs) { referenced.insert(s) }
@@ -371,6 +429,7 @@ enum DataInference {
     let knownNonData = Set(parameters)
       .union(derived)
       .union(nonCenteredVarying.keys)
+      .union(gaussianProcessGP.keys)
     let dataReferenced = referenced.subtracting(knownNonData)
 
     for sym in dataReferenced where model.data[sym] == nil {
@@ -487,7 +546,9 @@ enum DataInference {
       covMatrixParameters: covMatrixParameters,
       cholFactorParameters: cholFactorParameters,
       wishartScaleColumns: wishartScaleColumnDims,
-      varyingVectorParameters: varyingVectorParameters
+      varyingVectorParameters: varyingVectorParameters,
+      gaussianProcessGP: gaussianProcessGP,
+      squareMatrixColumns: squareMatrixColumns
     )
   }
 

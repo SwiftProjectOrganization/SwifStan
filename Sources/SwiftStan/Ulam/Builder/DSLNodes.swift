@@ -313,6 +313,59 @@ public struct VaryingVectorPrior: ModelStatement {
   }
 }
 
+/// Gaussian process prior (2026-06-01) — McElreath Chapter 14 oceanic
+/// tools shape. Declares an N-length latent vector with a
+/// squared-exponential GP prior keyed on a precomputed `distanceMatrix`
+/// data column (must be `matrix[N, N]`). v1 ships the squared-exponential
+/// (`cov_GPL2`) kernel only; cardinality is hard-coded to `N` (one
+/// observation per group — McElreath's oceanic case). The user supplies
+/// scalar priors on the hyperparameters separately:
+///
+/// ```swift
+/// GaussianProcessPrior("g", indexedBy: "society",
+///                      distanceMatrix: "Dmat",
+///                      etasq: "etasq", rhosq: "rhosq")
+/// Prior("etasq", .exponential(2), truncation: Truncation(lower: 0))
+/// Prior("rhosq", .exponential(0.5), truncation: Truncation(lower: 0))
+/// ```
+///
+/// Emits the non-centred form internally: declares `vector[N] <name>_z;`
+/// in `parameters`, gives it a `std_normal()` prior, declares
+/// `vector[N] <name>;` in `transformed parameters`, builds the kernel
+/// matrix with the diagonal jitter, and assigns
+/// `<name> = cholesky_decompose(K) * <name>_z;`.
+public struct GaussianProcessPrior: ModelStatement {
+  public let name: String
+  public let indexedBy: String
+  public let distanceMatrix: String
+  public let etasq: DistributionArg
+  public let rhosq: DistributionArg
+  public let jitter: Double
+
+  public init(_ name: String,
+              indexedBy: String,
+              distanceMatrix: String,
+              etasq: DistributionArg,
+              rhosq: DistributionArg,
+              jitter: Double = 0.01) {
+    self.name = name
+    self.indexedBy = indexedBy
+    self.distanceMatrix = distanceMatrix
+    self.etasq = etasq
+    self.rhosq = rhosq
+    self.jitter = jitter
+  }
+
+  public var statement: Statement {
+    .gaussianProcessPrior(name: name,
+                          indexedBy: indexedBy,
+                          distanceMatrix: distanceMatrix,
+                          etasq: etasq,
+                          rhosq: rhosq,
+                          jitter: jitter)
+  }
+}
+
 public struct Link: ModelStatement {
   public let function: LinkFunction
   public let lhs: String
