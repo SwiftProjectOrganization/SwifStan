@@ -25,7 +25,7 @@ internal indirect enum AlistStatement: Equatable {
             rhs: ExpressionNode)
 }
 
-/// LHS of a `~` statement. Three shapes show up in McElreath's alists:
+/// LHS of a `~` statement. Four shapes show up in McElreath's alists:
 internal enum AlistSampleLhs: Equatable {
   /// `pulled_left` or `sigma_actor` — a plain identifier.
   case scalar(String)
@@ -33,6 +33,10 @@ internal enum AlistSampleLhs: Equatable {
   case indexed(name: String, indexColumn: String)
   /// `c(a, bp, bpc)` — group-prior shorthand, expanded by Slice B.
   case group([String])
+  /// `c(a, b)[cafe]` — Chapter-14 correlated varying effects. Lowering
+  /// synthesises a single packed parameter name by concatenation
+  /// (`["a", "b"]` → `ab`) and records `length = names.count`.
+  case groupIndexed(names: [String], indexColumn: String)
 }
 
 internal enum AlistLink: String, Equatable {

@@ -28,6 +28,22 @@ internal struct ClassifiedAlist: Equatable {
       case likelihood
       case scalarPrior
       case varyingPrior(indexedBy: String)
+      /// Promoted from `.scalarSample` when classify detects the LHS
+      /// also appears as the σ-vector of a `.varyingVectorSample`'s
+      /// `diag_pre_multiply(σ, L)` chol arg. `length` is the cardinality
+      /// symbol (v1: hard-coded "J").
+      case vectorPrior(length: String)
+      /// Chapter-14 correlated varying effects: `c(a, b)[cafe] ~ dmvnormchol(...)`
+      /// lowered to a packed parameter (`name = "ab"`) with `length`
+      /// = `c(...)` arity, same cardinality symbol the companion
+      /// `vectorPrior` uses.
+      case varyingVectorPrior(indexedBy: String, length: String)
+      /// `L_Omega ~ dlkjcorr(eta)` lowered through `.lkjCorrCholesky`,
+      /// classified directly as the matching DSL prior. `dim` is the
+      /// shared cardinality symbol (v1: "J") supplied by the companion
+      /// `.varyingVectorSample`; without one the classify pass falls
+      /// back to "J" and the user must supply it via data.
+      case lkjCorrCholeskyPrior(dim: String)
       case link(LinkFunction)
     }
     internal let kind: Kind
@@ -41,6 +57,14 @@ internal struct ClassifiedAlist: Equatable {
   internal let outcome: String
   internal let scalarParams: [String]
   internal let varyingParams: [String]
+  /// σ-vector parameters promoted from scalar (e.g. `sigma_ab` from
+  /// `sigma_ab ~ dexp(1)` paired with `c(a,b)[cafe] ~ dmvnormchol(…, sigma_ab)`).
+  internal let vectorParams: [String]
+  /// Packed varying-vector parameters (e.g. `ab` from `c(a, b)[cafe]`).
+  internal let varyingVectorParams: [String]
+  /// `lengthSymbol → integer length` bindings synthesised by classify
+  /// from the LHS `c(...)` arity. v1 hard-codes the symbol as "J".
+  internal let lengthBindings: [String: Int]
   internal let indexColumns: [String]
   internal let dataColumns: [String]
 }
@@ -57,13 +81,39 @@ internal enum AlistClassifyError: Error, CustomStringConvertible {
 }
 
 internal enum AlistClassify {
+  /// v1 cardinality symbol used by every `.varyingVectorSample` and the
+  /// promoted σ-vector(s) it implies. Multi-grouping models with
+  /// distinct vector lengths aren't supported yet — they would collide
+  /// on this single symbol.
+  private static let varyingVectorLengthSymbol = "J"
+
   internal static func classify(_ lowered: [LoweredAlistStatement]) throws -> ClassifiedAlist {
+    // Pre-pass: collect σ-vector promotion targets and the J length
+    // binding from any `.varyingVectorSample` statements. The σ-name is
+    // captured at lowering time so we don't have to re-parse the
+    // diag_pre_multiply chol arg here.
+    var vectorPromotions: [String: String] = [:]   // sigmaName → "J"
+    var lengthBindings: [String: Int] = [:]        // "J" → 2
+    var halfPositive: Set<String> = []
+    for stmt in lowered {
+      if case .varyingVectorSample(_, _, let len, let sName, _, _) = stmt {
+        vectorPromotions[sName] = varyingVectorLengthSymbol
+        lengthBindings[varyingVectorLengthSymbol] = len
+        // σ-vectors flanking a Cholesky scale are conventionally
+        // positive; promote them into the half-positive set the
+        // truncation post-pass already consults.
+        halfPositive.insert(sName)
+      }
+    }
+
     // McElreath convention: the first `~` statement (whose LHS is a
     // plain identifier, i.e. scalarSample) is the likelihood. Every
     // subsequent scalar sample is a prior on a parameter.
     var outcome: String? = nil
     var scalarParams: [String] = []
     var varyingParams: [String] = []
+    var vectorParams: [String] = []
+    var varyingVectorParams: [String] = []
     var indexColumns: [String] = []
     var statements: [ClassifiedAlist.Statement] = []
     var seenScalar = false
@@ -79,6 +129,26 @@ internal enum AlistClassify {
                                   dist: dist,
                                   truncation: trunc,
                                   linkRhs: nil))
+        } else if let lengthSym = vectorPromotions[name] {
+          vectorParams.append(name)
+          statements.append(.init(kind: .vectorPrior(length: lengthSym),
+                                  name: name,
+                                  dist: dist,
+                                  truncation: trunc,
+                                  linkRhs: nil))
+        } else if case .lkjCorrCholesky = dist {
+          // dlkjcorr lowers to `.lkjCorrCholesky`; promote to the
+          // dedicated DSL prior with `dim` taken from the same
+          // cardinality symbol the companion varying-vector uses.
+          // Track as a vector param so it isn't double-counted as a
+          // scalar (the generator allocates `cholesky_factor_corr[J]`).
+          vectorParams.append(name)
+          statements.append(.init(
+            kind: .lkjCorrCholeskyPrior(dim: varyingVectorLengthSymbol),
+            name: name,
+            dist: dist,
+            truncation: trunc,
+            linkRhs: nil))
         } else {
           scalarParams.append(name)
           statements.append(.init(kind: .scalarPrior,
@@ -95,6 +165,16 @@ internal enum AlistClassify {
                                 dist: dist,
                                 truncation: trunc,
                                 linkRhs: nil))
+      case .varyingVectorSample(let name, let idx, _, _, let dist, let trunc):
+        varyingVectorParams.append(name)
+        indexColumns.append(idx)
+        statements.append(.init(
+          kind: .varyingVectorPrior(indexedBy: idx,
+                                    length: varyingVectorLengthSymbol),
+          name: name,
+          dist: dist,
+          truncation: trunc,
+          linkRhs: nil))
       case .link(let fn, let target, let rhs):
         statements.append(.init(kind: .link(fn),
                                 name: target,
@@ -114,7 +194,11 @@ internal enum AlistClassify {
     var known: Set<String> = [outcomeName]
     known.formUnion(scalarParams)
     known.formUnion(varyingParams)
+    known.formUnion(vectorParams)
+    known.formUnion(varyingVectorParams)
     known.formUnion(indexColumns)
+    // The synthesised cardinality symbols (e.g. "J") aren't user data.
+    known.formUnion(lengthBindings.keys)
     var referenced: Set<String> = []
     for stmt in statements {
       if let dist = stmt.dist {
@@ -133,8 +217,8 @@ internal enum AlistClassify {
     // Slice D: σ-slot truncation inference. Walk every distribution
     // and collect names that appear as the *last* positional arg of
     // a normal / cauchy / lognormal / gamma — these are scale
-    // parameters and conventionally non-negative.
-    var halfPositive: Set<String> = []
+    // parameters and conventionally non-negative. Augmented above
+    // with σ-vector names from `.varyingVectorSample`.
     for stmt in statements {
       guard let dist = stmt.dist else { continue }
       if let scaleArg = scaleArgIfApplicable(dist),
@@ -143,7 +227,12 @@ internal enum AlistClassify {
       }
     }
     let adjusted = statements.map { s -> ClassifiedAlist.Statement in
-      if case .scalarPrior = s.kind, halfPositive.contains(s.name) {
+      let promotable: Bool = {
+        if case .scalarPrior = s.kind { return true }
+        if case .vectorPrior = s.kind { return true }
+        return false
+      }()
+      if promotable, halfPositive.contains(s.name) {
         // Merge `lower: 0` into the parameter's existing truncation.
         let trunc = mergeLowerZero(s.truncation)
         return .init(kind: s.kind,
@@ -160,6 +249,9 @@ internal enum AlistClassify {
       outcome: outcomeName,
       scalarParams: scalarParams,
       varyingParams: varyingParams,
+      vectorParams: vectorParams,
+      varyingVectorParams: varyingVectorParams,
+      lengthBindings: lengthBindings,
       indexColumns: indexColumns.uniqued(),
       dataColumns: dataColumns)
   }
@@ -167,6 +259,14 @@ internal enum AlistClassify {
   // MARK: - Helpers
 
   private static func distributionSymbols(_ d: Distribution) -> [String] {
+    // multivariateNormalCholesky's args are compound source-string
+    // expressions (`[a_bar, b_bar]'`, `diag_pre_multiply(sigma, L)`).
+    // Delegate to the same tokenizer DataInference uses so the alist
+    // pipeline's symbol tracking sees the embedded identifiers (not
+    // the whole source string).
+    if case .multivariateNormalCholesky = d {
+      return DistributionCatalog.symbolsReferenced(d)
+    }
     func sym(_ a: DistributionArg) -> [String] {
       if case .symbol(let n) = a { return [n] }
       return []
@@ -185,8 +285,8 @@ internal enum AlistClassify {
       return sym(nu) + sym(mu) + sym(sigma)
     case .lkjCorrCholesky(let eta):
       return sym(eta)
-    case .multivariateNormalCholesky(let mean, let chol):
-      return sym(mean) + sym(chol)
+    case .multivariateNormalCholesky:
+      return []  // handled above
     case .wishart(let nu, let V):
       return sym(nu) + sym(V)
     }

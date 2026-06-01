@@ -56,8 +56,8 @@ internal struct AlistEmitter {
 
   private func appendDataLiteral(_ s: inout String) {
     s += "    let data: UlamData = [\n"
-    // Order: outcome, index columns (sorted), other data columns (sorted),
-    // then varyingParams' index columns aren't a thing (covered above).
+    // Order: outcome, vector-length cardinality bindings, index columns,
+    // other data columns.
     var emitted: Set<String> = []
     func line(_ key: String, _ kind: String) {
       s += "      \"\(key)\": .\(kind)([\(stubValue(for: key))]),\n"
@@ -65,6 +65,13 @@ internal struct AlistEmitter {
     }
     if !classified.outcome.isEmpty, !emitted.contains(classified.outcome) {
       line(classified.outcome, columnKind(name: classified.outcome))
+    }
+    // Bind synthesised cardinality symbols (e.g. "J": .scalarInt(2)).
+    // Sort for deterministic output.
+    for (sym, len) in classified.lengthBindings.sorted(by: { $0.key < $1.key })
+      where !emitted.contains(sym) {
+      s += "      \"\(sym)\": .scalarInt(\(len)),\n"
+      emitted.insert(sym)
     }
     for col in classified.indexColumns where !emitted.contains(col) {
       line(col, "integer")
@@ -113,6 +120,18 @@ internal struct AlistEmitter {
       case .varyingPrior(let indexedBy):
         let trunc = renderTruncation(stmt.truncation)
         s += "      VaryingPrior(\"\(stmt.name)\", indexedBy: \"\(indexedBy)\", \(renderDist(stmt.dist!))\(trunc))\n"
+      case .vectorPrior(let length):
+        let trunc = renderTruncation(stmt.truncation)
+        s += "      VectorPrior(\"\(stmt.name)\", length: \"\(length)\", \(renderDist(stmt.dist!))\(trunc))\n"
+      case .varyingVectorPrior(let indexedBy, let length):
+        let trunc = renderTruncation(stmt.truncation)
+        s += "      VaryingVectorPrior(\"\(stmt.name)\", indexedBy: \"\(indexedBy)\", length: \"\(length)\", \(renderDist(stmt.dist!))\(trunc))\n"
+      case .lkjCorrCholeskyPrior(let dim):
+        // Pull eta straight from the lowered Distribution; truncation
+        // is not meaningful on a cholesky_factor_corr parameter.
+        if case .lkjCorrCholesky(let eta) = stmt.dist! {
+          s += "      LKJCorrCholeskyPrior(\"\(stmt.name)\", dim: \"\(dim)\", eta: \(renderArg(eta)))\n"
+        }
       }
     }
     s += "    }\n"

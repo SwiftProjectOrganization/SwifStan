@@ -105,4 +105,48 @@ struct Alist2DslTests {
       _ = try alist2dsl(model: model)
     }
   }
+
+  // MARK: - dmvnormchol + dlkjcorr: correlated varying effects (paired aliases)
+
+  /// Minimal cafe-style alist exercising the paired `dmvnormchol` +
+  /// `dlkjcorr` aliases together. `L_Omega` is a proper
+  /// `cholesky_factor_corr[J]` parameter via dlkjcorr; J is derived
+  /// from the LHS `c(a, b)` arity.
+  static let cafeAlistPaired = """
+    cafe_demo <- ulam(
+      alist(
+        wait ~ dnorm(mu, sigma),
+        sigma ~ dexp(1),
+        sigma_ab ~ dexp(1),
+        L_Omega ~ dlkjcorr(2),
+        c(a, b)[cafe] ~ dmvnormchol(c(a_bar, b_bar), L_Omega, sigma_ab)
+      ),
+      data=d )
+    """
+
+  @Test func cafeDmvnormcholAlistEmitsExpectedDsl() throws {
+    let model = "alist2dsl_cafe_paired_fixture"
+    let paths = casePaths(for: model)
+    try ensureCaseDirectories(paths)
+    defer { try? FileManager.default.removeItem(at: caseRoot().appendingPathComponent(model)) }
+
+    let alistURL = paths.preliminaries.appendingPathComponent("\(model).alist.R")
+    try Self.cafeAlistPaired.write(to: alistURL, atomically: true, encoding: .utf8)
+
+    let swiftURL = try alist2dsl(model: model)
+    let swiftSource = try String(contentsOf: swiftURL, encoding: .utf8)
+
+    // J cardinality is synthesised from the LHS `c(a, b)` arity (= 2).
+    #expect(swiftSource.contains("\"J\": .scalarInt(2)"))
+    // σ_ab promoted from scalar to vector prior of length J; exponential
+    // gets the conventional lower:0 truncation via the σ-truncation pass.
+    #expect(swiftSource.contains("VectorPrior(\"sigma_ab\", length: \"J\", .exponential(1), truncation: Truncation(lower: 0))"))
+    // dlkjcorr → dedicated LKJCorrCholeskyPrior with dim derived from J.
+    #expect(swiftSource.contains("LKJCorrCholeskyPrior(\"L_Omega\", dim: \"J\", eta: 2)"))
+    // Packed param name "ab" from `c(a, b)`, length J, chol arg uses
+    // `diag_pre_multiply(σ, L_Omega)` order.
+    #expect(swiftSource.contains("VaryingVectorPrior(\"ab\", indexedBy: \"cafe\", length: \"J\", .multivariateNormalCholesky(\"[a_bar, b_bar]'\", \"diag_pre_multiply(sigma_ab, L_Omega)\"))"))
+    // L_Omega is a parameter, not data — must not appear in the data literal.
+    #expect(!swiftSource.contains("\"L_Omega\": .real("))
+  }
 }

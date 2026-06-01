@@ -32,6 +32,13 @@ internal enum AlistToUlamModel {
       out[classified.outcome] = stubColumn(for: classified.outcome, in: classified)
       emitted.insert(classified.outcome)
     }
+    // Bind synthesised vector-length cardinality symbols (v1: "J" → 2)
+    // before generic data columns so vector/varying-vector priors
+    // resolve their `length:` arguments.
+    for (sym, len) in classified.lengthBindings where !emitted.contains(sym) {
+      out[sym] = .scalarInt(len)
+      emitted.insert(sym)
+    }
     for col in classified.indexColumns where !emitted.contains(col) {
       out[col] = .integer([1])
       emitted.insert(col)
@@ -77,6 +84,26 @@ internal enum AlistToUlamModel {
                                  truncation: stmt.truncation,
                                  useLpdf: false,
                                  nonCentered: false))
+      case .vectorPrior(let length):
+        out.append(.vectorPrior(name: stmt.name,
+                                length: length,
+                                distribution: stmt.dist!,
+                                truncation: stmt.truncation,
+                                useLpdf: false))
+      case .varyingVectorPrior(let idx, let length):
+        out.append(.varyingVectorPrior(name: stmt.name,
+                                       indexedBy: idx,
+                                       length: length,
+                                       countSymbol: nil,
+                                       distribution: stmt.dist!,
+                                       truncation: stmt.truncation,
+                                       useLpdf: false))
+      case .lkjCorrCholeskyPrior(let dim):
+        // The dlkjcorr Distribution has its eta arg in slot 0.
+        guard case .lkjCorrCholesky(let eta) = stmt.dist! else {
+          fatalError("dlkjcorr classify produced a non-lkjCorrCholesky distribution")
+        }
+        out.append(.lkjCorrCholeskyPrior(name: stmt.name, dim: dim, eta: eta))
       case .link(let fn):
         let source = AlistEmitter.canonicalExpression(stmt.linkRhs!)
         out.append(.link(function: fn,

@@ -98,4 +98,39 @@ struct AlistParserTests {
       _ = try AlistParser.parse("x <- 42")
     }
   }
+
+  // MARK: - dmvnormchol (correlated varying effects) shape
+
+  @Test func cafeGroupIndexedLhsParses() throws {
+    let src = """
+      alist(
+        c(a, b)[cafe] ~ dmvnormchol(c(a_bar, b_bar), L_Omega, sigma_ab)
+      )
+      """
+    let stmts = try AlistParser.parse(src)
+    #expect(stmts.count == 1)
+    guard case let .sample(lhs, dist, _) = stmts[0] else {
+      Issue.record("statement should be a sample"); return
+    }
+    #expect(lhs == .groupIndexed(names: ["a", "b"], indexColumn: "cafe"))
+    #expect(dist.name == "dmvnormchol")
+    #expect(dist.args.count == 3)
+    // The `c(a_bar, b_bar)` arg is synthesised to the Stan row-vector
+    // literal so it flows through DistributionArg.symbol downstream.
+    #expect(dist.args[0] == .identifier("[a_bar, b_bar]'"))
+    #expect(dist.args[1] == .identifier("L_Omega"))
+    #expect(dist.args[2] == .identifier("sigma_ab"))
+  }
+
+  @Test func dlkjcorrPriorParses() throws {
+    let src = "alist(L_Omega ~ dlkjcorr(2))"
+    let stmts = try AlistParser.parse(src)
+    #expect(stmts.count == 1)
+    guard case let .sample(lhs, dist, _) = stmts[0] else {
+      Issue.record("statement should be a sample"); return
+    }
+    #expect(lhs == .scalar("L_Omega"))
+    #expect(dist.name == "dlkjcorr")
+    #expect(dist.args == [.literal(.integer(2))])
+  }
 }

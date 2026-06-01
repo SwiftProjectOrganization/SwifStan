@@ -12,7 +12,7 @@ This file is a forward-looking checklist of work that's planned but not yet sche
 
 - [x] ✅ **`dwishart` prior** — shipped 2026-06-01. Adds `WishartPrior("Omega", dim: "K", nu: "nu", V: "V_scale")` DSL node, `.wishart` Distribution case, `wishartPrior` Statement case, and `wishartScaleColumns` exclusion from Phase-6 cardinality binding so `realCovMatrix` scale-matrix data columns aren't mistaken for cardinality anchors.
 
-- [ ] **`dlkjcorr` alist alias** — when alist support lands, map `dlkjcorr(eta)` in `.alist.R` files to the existing `LKJCorrCholeskyPrior` statement (no new DSL node needed; the Cholesky form is the preferred Stan idiom).
+- [x] ✅ **`dmvnormchol` + `dlkjcorr` alist aliases** (paired) — shipped 2026-06-01. Maps McElreath's R-alist shape `c(a, b)[cafe] ~ dmvnormchol(c(a_bar, b_bar), L_Omega, sigma_cafe)` and `L_Omega ~ dlkjcorr(eta)` to the existing `VaryingVectorPrior` + `LKJCorrCholeskyPrior` + `diag_pre_multiply` Stan output shipped 2026-05-31 with the cafe model. No new DSL nodes added; classify pass synthesises the `J` cardinality from the LHS `c(...)` arity, promotes the σ-named scalar `~ dexp(...)` companion to `VectorPrior(length: "J")`, and routes `dlkjcorr` to `LKJCorrCholeskyPrior(dim: "J", ...)`. Known limitation: single grouping level only — multi-grouping models with distinct vector lengths would collide on the hard-coded `"J"` symbol.
 
 - [ ] Gaussian process priors.
 

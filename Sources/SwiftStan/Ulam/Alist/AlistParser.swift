@@ -195,12 +195,29 @@ internal enum AlistParser {
     guard !tokens.isEmpty else {
       throw AlistParserError.emptyStatement(position: 0)
     }
-    // Shape A: c(a, b, c)
+    // Shapes A and D both start with `c(`. Locate the matching `)` and
+    // peek the tail to disambiguate.
     if tokens.count >= 3,
        tokens[0].kind == .identifier, tokens[0].lexeme == "c",
-       tokens[1].kind == .leftParen,
-       tokens.last?.kind == .rightParen {
-      let inner = Array(tokens[2..<(tokens.count - 1)])
+       tokens[1].kind == .leftParen {
+      var depth = 1
+      var closeIdx = 2
+      while closeIdx < tokens.count {
+        switch tokens[closeIdx].kind {
+        case .leftParen, .leftBracket: depth += 1
+        case .rightParen, .rightBracket:
+          depth -= 1
+          if depth == 0 { break }
+        default: break
+        }
+        if depth == 0 { break }
+        closeIdx += 1
+      }
+      guard closeIdx < tokens.count, tokens[closeIdx].kind == .rightParen else {
+        throw AlistParserError.unexpectedToken(
+          tokens[0], expected: "closing `)` of c(...)")
+      }
+      let inner = Array(tokens[2..<closeIdx])
       let names = try splitOnTopLevelCommas(inner).map { group -> String in
         guard group.count == 1, group[0].kind == .identifier else {
           throw AlistParserError.unexpectedToken(
@@ -209,7 +226,19 @@ internal enum AlistParser {
         }
         return group[0].lexeme
       }
-      return .group(names)
+      // Shape D: c(a, b)[cafe]
+      if closeIdx + 3 < tokens.count,
+         tokens[closeIdx + 1].kind == .leftBracket,
+         tokens[closeIdx + 2].kind == .identifier,
+         tokens[closeIdx + 3].kind == .rightBracket,
+         closeIdx + 3 == tokens.count - 1 {
+        return .groupIndexed(names: names,
+                             indexColumn: tokens[closeIdx + 2].lexeme)
+      }
+      // Shape A: bare c(...)
+      if closeIdx == tokens.count - 1 {
+        return .group(names)
+      }
     }
     // Shape B: <ident>[<ident>]
     if tokens.count == 4,
@@ -225,7 +254,7 @@ internal enum AlistParser {
       return .scalar(tokens[0].lexeme)
     }
     throw AlistParserError.unexpectedToken(
-      tokens[0], expected: "scalar name, c(...) group, or name[index]")
+      tokens[0], expected: "scalar name, c(...) group, name[index], or c(...)[index]")
   }
 
   private static func parseDistribution(_ tokens: [AlistToken],
@@ -243,9 +272,33 @@ internal enum AlistParser {
     let argGroups = splitOnTopLevelCommas(inner)
     var args: [ExpressionNode] = []
     for group in argGroups {
-      args.append(try parseExpression(tokens: group, in: source))
+      if let row = parseCRowVectorArg(group) {
+        args.append(.identifier(row))
+      } else {
+        args.append(try parseExpression(tokens: group, in: source))
+      }
     }
     return AlistDistribution(name: name, args: args)
+  }
+
+  /// Recognise `c(id1, id2, …)` distribution-arg shape. Returns the
+  /// Stan-side row-vector literal `[id1, id2, …]'`. ExpressionParser
+  /// only handles unary calls, so multi-arg `c(...)` is intercepted
+  /// here and lowered to a single identifier carrying the Stan source.
+  private static func parseCRowVectorArg(_ tokens: [AlistToken]) -> String? {
+    guard tokens.count >= 4,
+          tokens[0].kind == .identifier, tokens[0].lexeme == "c",
+          tokens[1].kind == .leftParen,
+          tokens.last?.kind == .rightParen else { return nil }
+    let inner = Array(tokens[2..<(tokens.count - 1)])
+    let groups = splitOnTopLevelCommas(inner)
+    var names: [String] = []
+    for g in groups {
+      guard g.count == 1, g[0].kind == .identifier else { return nil }
+      names.append(g[0].lexeme)
+    }
+    guard names.count >= 2 else { return nil }
+    return "[\(names.joined(separator: ", "))]'"
   }
 
   // MARK: - Expression sub-parsing via source-span extraction

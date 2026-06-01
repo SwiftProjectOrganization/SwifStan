@@ -25,6 +25,17 @@ internal enum LoweredAlistStatement: Equatable {
                      indexedBy: String,
                      dist: Distribution,
                      truncation: Truncation)
+  /// Chapter-14 correlated varying effects (`c(a, b)[cafe] ~ dmvnormchol(...)`).
+  /// `name` is the packed parameter (e.g. `"ab"` from `c(a, b)`); `length`
+  /// is the inner vector size taken from the LHS `c(...)` arity;
+  /// `sigmaName` is the σ-vector symbol the classify pass promotes to a
+  /// `vectorPrior` of the same length.
+  case varyingVectorSample(name: String,
+                           indexedBy: String,
+                           length: Int,
+                           sigmaName: String,
+                           dist: Distribution,
+                           truncation: Truncation)
   case link(function: LinkFunction, target: String, rhs: ExpressionNode)
 }
 
@@ -58,19 +69,26 @@ internal enum AlistLowering {
                          target: target,
                          rhs: rhs))
       case .sample(let lhs, let dist, let trunc):
-        let lowered = try lowerDistribution(dist)
         switch lhs {
         case .scalar(let name):
+          let lowered = try lowerDistribution(dist)
           out.append(.scalarSample(name: name, dist: lowered, truncation: trunc))
         case .indexed(let name, let col):
+          let lowered = try lowerDistribution(dist)
           out.append(.varyingSample(name: name,
                                     indexedBy: col,
                                     dist: lowered,
                                     truncation: trunc))
         case .group(let names):
+          let lowered = try lowerDistribution(dist)
           for n in names {
             out.append(.scalarSample(name: n, dist: lowered, truncation: trunc))
           }
+        case .groupIndexed(let names, let col):
+          out.append(try lowerGroupIndexed(names: names,
+                                           indexColumn: col,
+                                           dist: dist,
+                                           truncation: trunc))
         }
       }
     }
@@ -134,9 +152,55 @@ internal enum AlistLowering {
     case "dmvnorm":
       try requireArity(dist, expected: 2, got: args.count)
       return .multivariateNormal(args[0], args[1])
+    case "dlkjcorr":
+      // McElreath's `dlkjcorr(eta)` maps to the Cholesky form — the
+      // preferred Stan idiom. The companion `c(...)[...] ~ dmvnormchol(...)`
+      // statement supplies the `dim` cardinality via lengthBindings;
+      // see AlistClassify for the promotion to `.lkjCorrCholeskyPrior`.
+      try requireArity(dist, expected: 1, got: args.count)
+      return .lkjCorrCholesky(args[0])
     default:
       throw AlistLoweringError.unsupportedDistribution(name: dist.name)
     }
+  }
+
+  /// `c(a, b)[cafe] ~ dmvnormchol(c(a_bar, b_bar), L_Omega, sigma_ab)` →
+  /// `.varyingVectorSample("ab", indexedBy: "cafe", length: 2,
+  ///                       sigmaName: "sigma_ab",
+  ///                       dist: .multivariateNormalCholesky(
+  ///                         "[a_bar, b_bar]'",
+  ///                         "diag_pre_multiply(sigma_ab, L_Omega)"))`.
+  /// The σ-name is captured separately so the classify pass can promote
+  /// the companion `sigma_ab ~ dexp(1)` scalarSample to a `vectorPrior`.
+  private static func lowerGroupIndexed(names: [String],
+                                        indexColumn: String,
+                                        dist: AlistDistribution,
+                                        truncation: Truncation) throws
+                                        -> LoweredAlistStatement {
+    guard dist.name == "dmvnormchol" || dist.name == "dmvnorm2" else {
+      throw AlistLoweringError.unsupportedDistribution(name: dist.name)
+    }
+    try requireArity(dist, expected: 3, got: dist.args.count)
+    guard names.count >= 2 else {
+      throw AlistLoweringError.unsupportedDistributionArg(
+        .identifier(names.first ?? ""), in: dist.name)
+    }
+    let mean = try lowerArg(dist.args[0], in: dist.name)
+    guard case .identifier(let lOmega) = dist.args[1] else {
+      throw AlistLoweringError.unsupportedDistributionArg(dist.args[1], in: dist.name)
+    }
+    guard case .identifier(let sigma) = dist.args[2] else {
+      throw AlistLoweringError.unsupportedDistributionArg(dist.args[2], in: dist.name)
+    }
+    let chol = DistributionArg.symbol("diag_pre_multiply(\(sigma), \(lOmega))")
+    let synthName = names.joined()
+    return .varyingVectorSample(
+      name: synthName,
+      indexedBy: indexColumn,
+      length: names.count,
+      sigmaName: sigma,
+      dist: .multivariateNormalCholesky(mean, chol),
+      truncation: truncation)
   }
 
   private static func requireArity(_ dist: AlistDistribution,
