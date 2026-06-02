@@ -313,6 +313,36 @@ public struct VaryingVectorPrior: ModelStatement {
   }
 }
 
+/// Ordered logit / probit cutpoints (2026-06-02) — McElreath Chapter 12
+/// "Monsters and Mixtures". Declares an `ordered[<K>-1] <name>;`
+/// parameter for use as the `cutpoints` arg of an `.orderedLogistic`
+/// or `.orderedProbit` likelihood:
+///
+/// ```swift
+/// Likelihood("R", .orderedLogistic("phi", "cutpoints"))
+/// OrderedCutpoints("cutpoints", K: "K")
+/// Prior("cutpoints", .normal(0, 1.5))
+/// ```
+///
+/// `K` is a cardinality symbol the user binds in data
+/// (`"K": .scalarInt(7)`). The iid prior on the K-1 cutpoint values is
+/// supplied separately as a regular `Prior` over the same name — Stan
+/// vectorises the scalar normal across the ordered vector entries
+/// automatically.
+public struct OrderedCutpoints: ModelStatement {
+  public let name: String
+  public let K: String
+
+  public init(_ name: String, K: String) {
+    self.name = name
+    self.K = K
+  }
+
+  public var statement: Statement {
+    .orderedCutpointsPrior(name: name, K: K)
+  }
+}
+
 /// Gaussian process prior (2026-06-01) — McElreath Chapter 14 oceanic
 /// tools shape. Declares an N-length latent vector with a
 /// squared-exponential GP prior keyed on a precomputed `distanceMatrix`

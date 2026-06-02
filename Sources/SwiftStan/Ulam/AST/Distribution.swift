@@ -73,4 +73,11 @@ public enum Distribution: Hashable, Sendable {
   // `nu` is degrees of freedom (must be > dim - 1); `V` is the
   // scale matrix symbol (typically a `cov_matrix`-typed data column).
   case wishart(_ nu: DistributionArg, _ V: DistributionArg)
+  // Ordered logit (2026-06-02) — discrete outcome 1..K modelled via a
+  // latent linear predictor `eta` and K-1 ordered cutpoints. `cutpoints`
+  // must be a symbol naming an `ordered[K-1]`-typed parameter declared
+  // by a companion `OrderedCutpoints` statement.
+  case orderedLogistic(_ eta: DistributionArg, _ cutpoints: DistributionArg)
+  // Ordered probit — same structure, probit link instead of logit.
+  case orderedProbit(_ eta: DistributionArg, _ cutpoints: DistributionArg)
 }

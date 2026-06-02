@@ -147,6 +147,11 @@ enum BlockEmitter {
         // varying effect — outer array indexed by the group count,
         // inner vector of length `<length>`.
         lines.append("  array[\(shape.outer)] vector[\(shape.length)] \(name);")
+      } else if let dim = inferred.orderedCutpointParameters[name] {
+        // Ordered logit / probit (2026-06-02): `ordered[<K>-1] <name>;`.
+        // The K-1 size form renders Stan's bracketed expression form
+        // verbatim — Stan's parser accepts the literal subtraction.
+        lines.append("  ordered[\(dim)-1] \(name);")
       } else {
         lines.append("  real\(constraint) \(name);")
       }
@@ -386,6 +391,12 @@ enum BlockEmitter {
         if let spec = inferred.gaussianProcessGP[name] {
           priors.append("  \(spec.rawName) ~ std_normal();")
         }
+      case .orderedCutpointsPrior:
+        // Ordered cutpoints (2026-06-02): declaration-only. The iid
+        // prior across the K-1 cutpoint entries is supplied via a
+        // separate `Prior(<name>, ...)` statement that Stan vectorises
+        // automatically over the ordered vector.
+        break
       case .likelihood(let lhs, let dist, let trunc, let useLpdf):
         likelihoods.append(try emitSampling(lhs: lhs, distribution: dist,
                                             truncation: trunc, useLpdf: useLpdf))
@@ -507,12 +518,14 @@ enum BlockEmitter {
                                    knownDataVectors: knownDataVectors)
     case .likelihood, .prior, .varyingPrior, .vectorPrior,
          .matrixPrior, .covMatrixPrior, .lkjCorrCholeskyPrior,
-         .wishartPrior, .varyingVectorPrior, .gaussianProcessPrior:
+         .wishartPrior, .varyingVectorPrior, .gaussianProcessPrior,
+         .orderedCutpointsPrior:
       // Distribution args are scalars in the current AST (literal or
       // symbol). For varying / vector / matrix / cov_matrix /
       // chol-factor / varying-vector / GP priors, the LHS is a vector-
       // or matrix-typed parameter and Stan vectorises the `~` operator
-      // natively over the flattened form.
+      // natively over the flattened form. Ordered-cutpoints priors
+      // are declaration-only and emit no sampling line.
       return .vectorise
     }
   }
@@ -820,6 +833,7 @@ enum BlockEmitter {
     case .wishartPrior(let name, _, _, _):       return name
     case .varyingVectorPrior(let name, _, _, _, _, _, _): return name
     case .gaussianProcessPrior(let name, _, _, _, _, _):  return name
+    case .orderedCutpointsPrior(let name, _):    return name
     case .link(_, let lhs, _):                return lhs
     case .deterministic(let lhs, _):          return lhs
     }

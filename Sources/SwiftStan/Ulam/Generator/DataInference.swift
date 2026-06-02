@@ -87,6 +87,11 @@ struct InferredModel {
   /// emits the sampling line at the scalar form — Stan vectorises the
   /// `~` operator over the outer array automatically.
   let varyingVectorParameters: [String: (outer: String, length: String)]
+  /// Ordered logit / probit (2026-06-02): cutpoints parameter name → K
+  /// cardinality symbol. BlockEmitter declares `ordered[<K>-1] <name>;`
+  /// in `parameters {}`. The user supplies a separate `Prior(<name>, …)`
+  /// to give the iid prior across the K-1 cutpoint values.
+  let orderedCutpointParameters: [String: String]
   /// Gaussian process priors (2026-06-01): latent-name → spec for every
   /// `GaussianProcessPrior`. BlockEmitter declares `<name>` in
   /// `transformed parameters {}` (built from `<rawName>` z-scores plus
@@ -220,6 +225,8 @@ enum DataInference {
     // Gaussian process priors (2026-06-01).
     var gaussianProcessGP: [String: GPSpec] = [:]
     var squareMatrixColumns: Set<String> = []
+    // Ordered logit / probit (2026-06-02).
+    var orderedCutpointParameters: [String: String] = [:]
 
     for statement in model.statements {
       switch statement {
@@ -371,6 +378,16 @@ enum DataInference {
         referenced.insert(length)
         for s in DistributionCatalog.symbolsReferenced(dist) { referenced.insert(s) }
         for s in DistributionCatalog.symbolsReferenced(trunc) { referenced.insert(s) }
+      case .orderedCutpointsPrior(let name, let K):
+        // Ordered logit / probit Slice D: declares `ordered[<K>-1] <name>;`
+        // in `parameters`. Register K in `phaseSixSymbolsDeclared` so the
+        // existing scalarInt-binding path accepts a `"K": .scalarInt(...)`
+        // data entry as the cardinality source (parallels the cafe-style
+        // J binding for the multivariate hierarchical priors).
+        if !parameters.contains(name) { parameters.append(name) }
+        orderedCutpointParameters[name] = K
+        phaseSixSymbolsDeclared.insert(K)
+        referenced.insert(K)
       case .gaussianProcessPrior(let name, let indexedBy, let distanceMatrix,
                                  let etasq, let rhosq, let jitter):
         // The latent vector `<name>` lives in `transformed parameters`,
@@ -414,6 +431,29 @@ enum DataInference {
     // and sampling form.
     for name in scalarPriorNames.intersection(varyingPriorNames) {
       throw DataInferenceError.parameterIsBothScalarAndVarying(name: name)
+    }
+
+    // Ordered logit / probit (2026-06-02) post-fix: now that the
+    // cutpoints declaration has been observed, patch
+    // `outcomeBoundsByLhs[lhs].upper` for any ordered likelihood whose
+    // cutpoints arg names a registered ordered parameter. The catalog
+    // can't supply the K symbol on its own because it sees one
+    // distribution at a time, with no view of the parameter dict.
+    for statement in model.statements {
+      guard case .likelihood(let lhs, let dist, _, _) = statement else { continue }
+      let cutpointsArg: DistributionArg
+      switch dist {
+      case .orderedLogistic(_, let cp), .orderedProbit(_, let cp):
+        cutpointsArg = cp
+      default:
+        continue
+      }
+      guard case .symbol(let cutName) = cutpointsArg,
+            let K = orderedCutpointParameters[cutName] else { continue }
+      let existingLower = outcomeBoundsByLhs[lhs]?.lower
+      outcomeBoundsByLhs[lhs] = DistributionCatalog.OutcomeBounds(
+        lower: existingLower ?? "1",
+        upper: K)
     }
 
     // Materialise the parameter-constraint suffixes.
@@ -547,6 +587,7 @@ enum DataInference {
       cholFactorParameters: cholFactorParameters,
       wishartScaleColumns: wishartScaleColumnDims,
       varyingVectorParameters: varyingVectorParameters,
+      orderedCutpointParameters: orderedCutpointParameters,
       gaussianProcessGP: gaussianProcessGP,
       squareMatrixColumns: squareMatrixColumns
     )

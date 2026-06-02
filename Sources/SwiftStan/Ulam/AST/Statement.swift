@@ -121,6 +121,16 @@ public enum Statement: Hashable, Sendable {
                           truncation: Truncation,
                           useLpdf: Bool)
 
+  /// Ordered logit / probit cutpoints (2026-06-02): declares an
+  /// `ordered[<K>-1] <name>;` parameter. Used as the `cutpoints` arg
+  /// of an `.orderedLogistic` / `.orderedProbit` likelihood. `K` is a
+  /// cardinality symbol the user binds via `"K": .scalarInt(...)` in
+  /// data. v1 doesn't emit any sampling line for the declaration
+  /// itself — the user attaches a separate `Prior("<name>", ...)` line
+  /// for the iid prior across the K-1 cutpoints, mirroring how scalar
+  /// priors vectorise over a vector parameter.
+  case orderedCutpointsPrior(name: String, K: String)
+
   /// Gaussian process prior (2026-06-01) on an N-length latent vector,
   /// using the squared-exponential of a precomputed N×N distance matrix
   /// (McElreath's `cov_GPL2`). v1 only supports the squared-exponential

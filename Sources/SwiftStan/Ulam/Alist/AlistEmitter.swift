@@ -169,6 +169,10 @@ internal struct AlistEmitter {
       return ".multivariateNormalCholesky(\(renderArg(mean)), \(renderArg(chol)))"
     case .wishart(let nu, let V):
       return ".wishart(\(renderArg(nu)), \(renderArg(V)))"
+    case .orderedLogistic(let eta, let cp):
+      return ".orderedLogistic(\(renderArg(eta)), \(renderArg(cp)))"
+    case .orderedProbit(let eta, let cp):
+      return ".orderedProbit(\(renderArg(eta)), \(renderArg(cp)))"
     }
   }
 

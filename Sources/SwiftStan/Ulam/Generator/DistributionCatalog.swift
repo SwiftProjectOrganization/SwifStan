@@ -41,6 +41,8 @@ enum DistributionCatalog {
     case .lkjCorrCholesky: return "lkj_corr_cholesky"
     case .multivariateNormalCholesky: return "multi_normal_cholesky"
     case .wishart: return "wishart"
+    case .orderedLogistic: return "ordered_logistic"
+    case .orderedProbit: return "ordered_probit"
     }
   }
 
@@ -64,6 +66,8 @@ enum DistributionCatalog {
     case .multivariateNormalCholesky(let mean, let chol):
                                             return "\(arg(mean)), \(arg(chol))"
     case .wishart(let nu, let V):           return "\(arg(nu)), \(arg(V))"
+    case .orderedLogistic(let eta, let c),
+         .orderedProbit(let eta, let c):    return "\(arg(eta)), \(arg(c))"
     }
   }
 
@@ -71,7 +75,7 @@ enum DistributionCatalog {
   /// rather than `_lpdf` (density) for these.
   static func isDiscrete(_ distribution: Distribution) -> Bool {
     switch distribution {
-    case .bernoulli, .binomial, .poisson:
+    case .bernoulli, .binomial, .poisson, .orderedLogistic, .orderedProbit:
       return true
     case .normal, .beta, .exponential, .gamma, .cauchy, .lognormal, .uniform,
          .studentT, .multivariateNormal, .lkjCorrCholesky,
@@ -91,7 +95,8 @@ enum DistributionCatalog {
     case .multivariateNormal, .lkjCorrCholesky, .multivariateNormalCholesky, .wishart:
       return true
     case .normal, .bernoulli, .binomial, .beta, .exponential, .poisson,
-         .gamma, .cauchy, .lognormal, .uniform, .studentT:
+         .gamma, .cauchy, .lognormal, .uniform, .studentT,
+         .orderedLogistic, .orderedProbit:
       return false
     }
   }
@@ -128,6 +133,8 @@ enum DistributionCatalog {
     case .lkjCorrCholesky(let eta):         parts = [eta]
     case .multivariateNormalCholesky:       parts = [] // handled above
     case .wishart(let nu, let V):           parts = [nu, V]
+    case .orderedLogistic(let eta, let c),
+         .orderedProbit(let eta, let c):    parts = [eta, c]
     }
     return parts.compactMap {
       if case .symbol(let s) = $0 { return s } else { return nil }
@@ -223,6 +230,13 @@ enum DistributionCatalog {
       // declarations can't express that. Leave upper unset for Phase 4
       // and revisit if a `transformed data` validation block lands.
       return OutcomeBounds(lower: "0", upper: nil)
+    case .orderedLogistic, .orderedProbit:
+      // Lower bound is fixed at 1; upper bound is the K cardinality
+      // symbol, which the catalog doesn't know about here. DataInference
+      // post-fixes `outcomeBoundsByLhs[lhs].upper` after the statement
+      // walk by reading the cutpoints arg's K binding from
+      // `orderedCutpointParameters`.
+      return OutcomeBounds(lower: "1", upper: nil)
     case .normal, .beta, .exponential, .gamma, .cauchy,
          .lognormal, .uniform, .studentT, .multivariateNormal,
          .lkjCorrCholesky, .multivariateNormalCholesky, .wishart:
