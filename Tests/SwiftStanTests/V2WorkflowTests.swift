@@ -54,12 +54,21 @@ struct V2WorkflowTests {
   /// over Howell1.csv pre-filtered to adults. The smallest non-trivial
   /// pipeline case — exercises dsl2stan ← Howell.ulam.swift OR stancode
   /// ← howell.alist.R, csv2json, compile, sample, and the post-sample
-  /// stansummary cleanup. Asserts only artifact emission (matching the
-  /// chimpanzees pattern); convergence is *not* asserted because
-  /// cmdstan's default unconstrained init range U(-2, 2) for `mu`
-  /// can't climb to the actual posterior at `mu ≈ 155 cm` without
-  /// explicit init values, and the DSL has no `init:` knob yet. Add
-  /// the R-hat assertion once DSL-level inits land.
+  /// stansummary cleanup.
+  ///
+  /// 2026-06-02: convergence is now asserted via R-hat < 1.05 on `mu`
+  /// and `sigma`. The pipeline takes the alist fast path (alist→stancode
+  /// is in-process; the v1 alist surface has no `start=` syntax for
+  /// inits yet), so the test pre-stages `Results/howell.init.json` to
+  /// simulate the hand-crafted file path users take today. The
+  /// `StanSample` auto-detection at `Methods/StanSample.swift:23-29`
+  /// finds the file and prepends `init=<path>` to the cmdstan argv —
+  /// without this, mu's U(-2, 2) random init can't climb to the
+  /// posterior at ~155 cm and the sampler diverges. Companion fixture
+  /// `Howell.ulam.swift` declares the same inits via `Inits([:])` for
+  /// the smoke-driver / dsl2stan path; that path is exercised by the
+  /// existing `smokeDriverRoundTripsToGolden` test plus the unit
+  /// coverage of `InitMarshaller`.
   @Test func howellPipelineEndToEnd() throws {
     let paths = casePaths(for: "howell")
     let fm = FileManager.default
@@ -74,6 +83,14 @@ struct V2WorkflowTests {
                  || fm.fileExists(atPath: driverURL.path),
                  "howell driver missing — need howell.alist.R or Howell.ulam.swift")
 
+    // Pre-stage `howell.init.json` so the alist path also gets inits.
+    // `StanSample` auto-detects the file at sample time.
+    try fm.createDirectory(at: paths.results,
+                           withIntermediateDirectories: true)
+    let initURL = paths.results.appendingPathComponent("howell.init.json")
+    try #"{"mu":178.0,"sigma":25.0}"#
+      .write(to: initURL, atomically: true, encoding: .utf8)
+
     let result = ulamPipeline(model: "howell", cmdstan: Self.cmdstan)
     try #require(result.1.isEmpty,
                  "ulamPipeline returned an error: \(result.1)")
@@ -85,5 +102,35 @@ struct V2WorkflowTests {
     #expect(fm.fileExists(atPath: data.path))
     #expect(fm.fileExists(atPath: summary.path),
             "stansummary missing — sample step didn't complete")
+    #expect(fm.fileExists(atPath: initURL.path),
+            "init.json missing — was it written before sample ran?")
+
+    // R-hat convergence. Threshold 1.05 is the standard
+    // "good enough" bar; the howell2 hand-crafted-init demo proved
+    // R-hat ≈ 1.001 for both parameters, so 1.05 is comfortable.
+    let summaryText = try String(contentsOf: summary, encoding: .utf8)
+    let muRhat = try #require(rhatFromSummary(summaryText, parameter: "mu"),
+                              "mu R-hat row missing from summary")
+    let sigmaRhat = try #require(rhatFromSummary(summaryText, parameter: "sigma"),
+                                 "sigma R-hat row missing from summary")
+    #expect(muRhat < 1.05,
+            "mu R-hat = \(muRhat) (expected < 1.05) — sampler may have diverged")
+    #expect(sigmaRhat < 1.05,
+            "sigma R-hat = \(sigmaRhat) (expected < 1.05) — sampler may have diverged")
+  }
+
+  /// Pull the R-hat column out of cmdstan's clean stansummary CSV.
+  /// Rows look like `"mu",149.5,…,1.001` — quoted name, comma-separated
+  /// numbers, R-hat as the last column.
+  private func rhatFromSummary(_ csv: String, parameter: String) -> Double? {
+    for line in csv.split(separator: "\n") {
+      let trimmed = line.trimmingCharacters(in: .whitespaces)
+      guard trimmed.hasPrefix("\"\(parameter)\",") else { continue }
+      let columns = trimmed.split(separator: ",")
+      guard let last = columns.last,
+            let value = Double(last) else { return nil }
+      return value
+    }
+    return nil
   }
 }

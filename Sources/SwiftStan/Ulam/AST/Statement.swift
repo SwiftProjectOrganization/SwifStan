@@ -174,6 +174,16 @@ public enum Statement: Hashable, Sendable {
                             rhosq: DistributionArg,
                             jitter: Double)
 
+  /// User-supplied initial values for cmdstan's NUTS warmup
+  /// (2026-06-02). Pure metadata — produces no Stan source. The pipeline
+  /// emits a sibling `<model>.init.json` file and prepends `init=<path>`
+  /// to the cmdstan argv when sampling. Used for models whose posterior
+  /// lives far from cmdstan's default U(-2, 2) random-init range —
+  /// e.g. McElreath's m4.1 over Howell1 with `mu ~ Normal(178, 20)`.
+  /// v1 supports scalar Double values only; vector / array inits are
+  /// deferred.
+  case inits(values: [String: Double])
+
   /// `function(lhs) <- rhs` — deterministic assignment via an inverse link.
   case link(function: LinkFunction, lhs: String, rhs: Expression)
 

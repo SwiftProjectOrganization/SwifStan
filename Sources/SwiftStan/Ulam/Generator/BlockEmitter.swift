@@ -420,6 +420,11 @@ enum BlockEmitter {
         // its per-row contribution is folded into a combined for-loop
         // assignment for the matching Link/Deterministic.
         break
+      case .inits:
+        // NUTS warmup inits (2026-06-02): pure metadata — the
+        // pipeline marshals it into `<model>.init.json` rather than
+        // emitting any Stan source.
+        break
       case .likelihood(let lhs, let dist, let trunc, let useLpdf):
         likelihoods.append(try emitSampling(lhs: lhs, distribution: dist,
                                             truncation: trunc, useLpdf: useLpdf))
@@ -636,7 +641,8 @@ enum BlockEmitter {
     case .likelihood, .prior, .varyingPrior, .vectorPrior,
          .matrixPrior, .covMatrixPrior, .lkjCorrCholeskyPrior,
          .wishartPrior, .varyingVectorPrior, .gaussianProcessPrior,
-         .orderedCutpointsPrior, .simplexPrior, .monotonicEffect:
+         .orderedCutpointsPrior, .simplexPrior, .monotonicEffect,
+         .inits:
       // Distribution args are scalars in the current AST (literal or
       // symbol). For varying / vector / matrix / cov_matrix /
       // chol-factor / varying-vector / GP priors, the LHS is a vector-
@@ -953,6 +959,7 @@ enum BlockEmitter {
     case .orderedCutpointsPrior(let name, _):    return name
     case .simplexPrior(let name, _):             return name
     case .monotonicEffect(let name, _, _, _, _): return name
+    case .inits:                              return ""
     case .link(_, let lhs, _):                return lhs
     case .deterministic(let lhs, _):          return lhs
     }

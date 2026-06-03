@@ -95,15 +95,38 @@ public func dsl2stan(model: String, verbose: Bool = false) throws -> URL {
   }
 
   let stanURL = paths.results.appendingPathComponent("\(model).stan")
-  // `print()` in the smoke driver appends a trailing newline; the
-  // in-process `stancode(model)` does not. Trim so dsl2stan and the
-  // in-process path produce byte-identical files.
-  let stanText = runResult.stdout.hasSuffix("\n")
-    ? String(runResult.stdout.dropLast())
-    : runResult.stdout
+  // 2026-06-02: split stdout on the inits sentinel. Smoke drivers
+  // produced by `AlistEmitter` print the Stan source, then the
+  // `// === SWIFTSTAN_INITS ===` line, then the init JSON. Older
+  // drivers without inits just print the Stan source.
+  let (stanText, initsText) = splitStanAndInits(runResult.stdout)
   try stanText.write(to: stanURL, atomically: true, encoding: .utf8)
   if verbose { print("dsl2stan: wrote \(stanURL.path)") }
+  if let inits = initsText, !inits.isEmpty {
+    let initsURL = paths.results.appendingPathComponent("\(model).init.json")
+    try inits.write(to: initsURL, atomically: true, encoding: .utf8)
+    if verbose { print("dsl2stan: wrote \(initsURL.path)") }
+  }
   return stanURL
+}
+
+/// Smoke-driver output may contain a `// === SWIFTSTAN_INITS ===`
+/// separator line followed by a JSON dict. Split the captured stdout
+/// into (stan source, optional inits JSON). The Stan source has its
+/// trailing newline (from `print()`) trimmed so dsl2stan and the
+/// in-process `stancode(_:)` path produce byte-identical files.
+private func splitStanAndInits(_ stdout: String) -> (String, String?) {
+  let sentinel = AlistEmitter.initsSentinel
+  if let range = stdout.range(of: "\n\(sentinel)\n") {
+    let stanRaw = String(stdout[..<range.lowerBound])
+    let initsRaw = String(stdout[range.upperBound...])
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    return (stanRaw, initsRaw)
+  }
+  let stanText = stdout.hasSuffix("\n")
+    ? String(stdout.dropLast())
+    : stdout
+  return (stanText, nil)
 }
 
 private func resolveUlamSourceDir() throws -> URL {

@@ -113,6 +113,11 @@ struct InferredModel {
   /// instead of `matrix[N, <cols-literal>]`. Populated from each
   /// `GaussianProcessPrior`'s `distanceMatrix` symbol.
   let squareMatrixColumns: Set<String>
+  /// User-supplied NUTS warmup inits (2026-06-02). Collected from any
+  /// `.inits(...)` statements (last-write-wins on duplicate keys). The
+  /// pipeline marshals these into `Results/<model>.init.json`; cmdstan
+  /// auto-picks the file up via the `init=<path>` flag.
+  let initValues: [String: Double]
 }
 
 /// Monotonic effect spec (2026-06-02): per-`MonotonicEffect`
@@ -251,6 +256,8 @@ enum DataInference {
     // Monotonic effects (2026-06-02).
     var simplexParameters: [String: String] = [:]
     var monotonicEffects: [MonotonicSpec] = []
+    // NUTS warmup inits (2026-06-02). Last-write-wins on duplicate keys.
+    var initValues: [String: Double] = [:]
 
     for statement in model.statements {
       switch statement {
@@ -467,6 +474,11 @@ enum DataInference {
         referenced.insert(distanceMatrix)
         if case .symbol(let s) = etasq { referenced.insert(s) }
         if case .symbol(let s) = rhosq { referenced.insert(s) }
+      case .inits(let values):
+        // 2026-06-02: collect user-supplied warmup inits. No symbol
+        // references, no parameter declarations — pure metadata that
+        // the marshaller turns into `<model>.init.json`.
+        for (k, v) in values { initValues[k] = v }
       case .link(_, let lhs, let rhs):
         if !derived.contains(lhs) { derived.append(lhs) }
         for s in symbolsIn(rhs) { referenced.insert(s) }
@@ -641,7 +653,8 @@ enum DataInference {
       simplexParameters: simplexParameters,
       monotonicEffects: monotonicEffects,
       gaussianProcessGP: gaussianProcessGP,
-      squareMatrixColumns: squareMatrixColumns
+      squareMatrixColumns: squareMatrixColumns,
+      initValues: initValues
     )
   }
 

@@ -28,11 +28,13 @@ public func ulam(_ model: UlamModel,
 
   let stanSource: String
   let dataJSON: Data
+  let initJSON: Data
   do {
     let inferred = try DataInference.classify(model)
     stanSource = try StanCodeGenerator.assemble(inferred: inferred,
                                                 statements: model.statements)
     dataJSON = DataMarshaller.encodeJSON(inferred)
+    initJSON = InitMarshaller.encodeJSON(inferred.initValues)
   } catch {
     return ("", "ulam: generator error: \(error)")
   }
@@ -46,12 +48,17 @@ public func ulam(_ model: UlamModel,
 
   let stanPath = paths.results.appendingPathComponent("\(name).stan")
   let dataPath = paths.results.appendingPathComponent("\(name).data.json")
+  let initPath = paths.results.appendingPathComponent("\(name).init.json")
   do {
     try stanSource.write(to: stanPath, atomically: true, encoding: .utf8)
     try dataJSON.write(to: dataPath, options: .atomic)
     if verbose {
       print("Wrote \(stanPath.path)")
       print("Wrote \(dataPath.path)")
+    }
+    if !initJSON.isEmpty {
+      try initJSON.write(to: initPath, options: .atomic)
+      if verbose { print("Wrote \(initPath.path)") }
     }
   } catch {
     return ("", "ulam: file write failed: \(error.localizedDescription)")

@@ -22,6 +22,14 @@ public func stanSample(dirUrl: URL,
 
   var args = ["sample"]
   args.append(contentsOf: arguments)
+  // 2026-06-02: auto-pick up a sibling `<model>.init.json` written by
+  // the V1 `ulam()` path or by `dsl2stan` from a smoke driver that
+  // declares `Inits([...])`. Disk presence is the activation trigger
+  // — no extra parameter needed.
+  let initPath = "\(binaryPath).init.json"
+  if fileManager.fileExists(atPath: initPath) {
+    args.append("init=\(initPath)")
+  }
   args.append(contentsOf: ["data", "file=\(binaryPath)" + ".data.json"])
   args.append(contentsOf: ["output", "file=\(binaryPath)" + "_output.csv"])
   

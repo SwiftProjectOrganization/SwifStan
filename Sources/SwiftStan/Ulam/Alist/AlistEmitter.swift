@@ -17,6 +17,13 @@
 import Foundation
 
 internal struct AlistEmitter {
+  /// Separator the smoke driver prints between the Stan source and the
+  /// init JSON. `dsl2stan` looks for this exact string to split stdout
+  /// into the two files. Plain Stan comment so a smoke driver that
+  /// runs without `dsl2stan` (or against a Stan parser that ingests
+  /// stdout) still parses the source half cleanly.
+  internal static let initsSentinel = "// === SWIFTSTAN_INITS ==="
+
   internal let stem: String      // e.g. "Chimpanzees" → produces ChimpanzeesSmoke
   internal let modelName: String // e.g. "chimpanzees" — the dir name
   internal let classified: ClassifiedAlist
@@ -33,6 +40,11 @@ internal struct AlistEmitter {
     s += "\n"
     s += "    do {\n"
     s += "      print(try stancode(model))\n"
+    s += "      let inits = try stanInits(model)\n"
+    s += "      if !inits.isEmpty {\n"
+    s += "        print(\"\(Self.initsSentinel)\")\n"
+    s += "        print(inits)\n"
+    s += "      }\n"
     s += "    } catch {\n"
     s += "      print(\"ERROR: \\(error)\")\n"
     s += "    }\n"

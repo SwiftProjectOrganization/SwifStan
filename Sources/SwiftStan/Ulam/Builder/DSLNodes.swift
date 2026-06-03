@@ -467,6 +467,33 @@ public struct GaussianProcessPrior: ModelStatement {
   }
 }
 
+/// User-supplied NUTS warmup initial values (2026-06-02). Use when
+/// cmdstan's default U(-2, 2) unconstrained init range is too far from
+/// the posterior — typically McElreath-style models with large
+/// location priors (`mu ~ Normal(178, 20)`):
+///
+/// ```swift
+/// Likelihood("height", .normal("mu", "sigma"))
+/// Prior("mu", .normal(178, 20))
+/// Prior("sigma", .uniform(0, 50))
+/// Inits(["mu": 178, "sigma": 25])
+/// ```
+///
+/// The pipeline writes `Results/<model>.init.json` and cmdstan
+/// auto-picks it up via the `init=<path>` flag. v1 supports scalar
+/// Double inits only; vector / array inits are deferred.
+public struct Inits: ModelStatement {
+  public let values: [String: Double]
+
+  public init(_ values: [String: Double]) {
+    self.values = values
+  }
+
+  public var statement: Statement {
+    .inits(values: values)
+  }
+}
+
 public struct Link: ModelStatement {
   public let function: LinkFunction
   public let lhs: String
