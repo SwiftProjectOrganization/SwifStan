@@ -149,6 +149,59 @@ public struct VaryingPrior: ModelStatement {
   }
 }
 
+/// Nested-groupings prior (2026-06-03) — McElreath / brms
+/// `a[country, region] ~ dnorm(a_bar, sigma_a)`. One parameter indexed
+/// by two integer data columns simultaneously, distinct from two
+/// separate `VaryingPrior` summands. v1 supports exactly two grouping
+/// dimensions.
+///
+/// ```swift
+/// Deterministic("mu", "a[country, region] + bX*x")
+/// NestedVaryingPrior("a", indexedBy: ["country", "region"],
+///                    .normal("a_bar", "sigma_a"))
+/// Prior("a_bar", .normal(0, 1))
+/// Prior("sigma_a", .exponential(1),
+///       constraints: Constraints(lower: 0))
+/// ```
+///
+/// Emits `matrix[N_country, N_region] a;` in `parameters{}` and
+/// `to_vector(a) ~ normal(a_bar, sigma_a);` in `model{}`. The two
+/// index columns are registered with auto-derived cardinality symbols
+/// `N_<col>` (override per-position via `countSymbols:`, where any
+/// `nil` entry keeps the default).
+public struct NestedVaryingPrior: ModelStatement {
+  public let name: String
+  public let indexedBy: [String]
+  public let countSymbols: [String?]
+  public let distribution: Distribution
+  public let truncation: Truncation
+  public let useLpdf: Bool
+
+  public init(_ name: String,
+              indexedBy: [String],
+              _ distribution: Distribution,
+              countSymbols: [String?]? = nil,
+              truncation: Truncation = .none,
+              useLpdf: Bool = false) {
+    self.name = name
+    self.indexedBy = indexedBy
+    self.countSymbols = countSymbols
+      ?? Array(repeating: nil, count: indexedBy.count)
+    self.distribution = distribution
+    self.truncation = truncation
+    self.useLpdf = useLpdf
+  }
+
+  public var statement: Statement {
+    .nestedVaryingPrior(name: name,
+                        indexedBy: indexedBy,
+                        countSymbols: countSymbols,
+                        distribution: distribution,
+                        truncation: truncation,
+                        useLpdf: useLpdf)
+  }
+}
+
 /// SUR Slice A (2026-05-30): `matrix[<rows>, <cols>] <name>;` parameter.
 /// The generator declares the matrix in `parameters {}` and emits an
 /// iid prior over every entry via `to_vector(<name>) ~ <dist>(args);`

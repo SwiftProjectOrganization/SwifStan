@@ -562,6 +562,44 @@ VaryingVectorPrior("ab", indexedBy: "cafe", length: "J",
 
 ---
 
+### `NestedVaryingPrior`  *(2026-06-03)*
+
+#### Purpose
+
+McElreath / brms-style **nested groupings**: one parameter indexed by two integer data columns simultaneously (`a[country, region]`). Distinct from two separate `VaryingPrior` summands — each (country, region) cell gets its own coefficient drawn from a shared hyperprior.
+
+#### Signature
+
+```swift
+public struct NestedVaryingPrior: ModelStatement {
+  public init(_ name: String,
+              indexedBy: [String],          // v1 requires exactly 2 entries
+              _ distribution: Distribution,
+              countSymbols: [String?]? = nil, // default: ["N_<col1>", "N_<col2>"]
+              truncation: Truncation = .none,
+              useLpdf: Bool = false)
+}
+```
+
+#### Example
+
+```swift
+Deterministic("mu", "a[country, region] + bX*x")
+NestedVaryingPrior("a", indexedBy: ["country", "region"],
+                   .normal("a_bar", "sigma_a"))
+Prior("a_bar", .normal(0, 1))
+Prior("sigma_a", .exponential(1),
+      constraints: Constraints(lower: 0))
+```
+
+→ `matrix[N_country, N_region] a;` declaration + `to_vector(a) ~ normal(a_bar, sigma_a);` flat iid prior over every cell (reuses the `MatrixPrior` rendering path). Both index columns get tightened to `array[N] int<lower=1, upper=N_<col>> <col>;` automatically.
+
+The mu RHS uses the new comma-form matrix subscript (`a[country, region]`), which forces loop emission: `for (i in 1:N) { mu[i] = a[country[i], region[i]] + bX*x[i]; }`. The expression parser accepts `a[i, j]` directly; `a[i][j]` chained form is **not** equivalent and Stan rejects it for `matrix`-typed parameters.
+
+v1 supports exactly two grouping dimensions — `indexedBy.count != 2` throws `DataInferenceError.nestedVaryingPriorArity`. Worked example: `nestedGroupingsMatchesGolden`.
+
+---
+
 ### `WishartPrior`  *(2026-06-01)*
 
 #### Purpose
@@ -927,6 +965,8 @@ For a complete model, the generator assembles:
 | `DataInferenceError.nonCenteredWithLpdfUnsupported` | `nonCentered: true` combined with `useLpdf: true`. |
 | `DataInferenceError.multipleCardinalitySymbolsAmbiguous` | Multiple Phase-6 cardinality symbols declared in a model that doesn't disambiguate them. |
 | `DataInferenceError.constraintsConflictWithTruncation` | A `Prior` / `VaryingPrior` has both `constraints:` and `truncation:` set. `truncation:` already drives the declaration constraint; pick one. |
+| `DataInferenceError.nestedVaryingPriorArity` | `NestedVaryingPrior(indexedBy:)` has length ≠ 2. v1 supports exactly two grouping dimensions. |
+| `ExpressionParseError.unexpectedToken` (for `a[i, j, k]`) | The expression parser supports `a[i]` (single subscript), `a[i][j]` (chained against a varying-vector parameter), and `a[i, j]` (matrix subscript). 3+ comma-separated indices are rejected; use nested DSL constructs instead. |
 
 ---
 
@@ -966,6 +1006,9 @@ Each demo is also tested as a round-trip golden in `Tests/SwiftStanTests/UlamGen
 | `startKwargFlowsIntoInitJSON`                | Per-prior `start:` flows into `<model>.init.json` |
 | `initsOverridesPerPriorStart`                | `Inits([:])` overlays per-prior `start:` |
 | `constraintsAndTruncationOnSamePriorRejected` | Reject co-set `constraints:` + `truncation:` |
+| `nestedGroupingsMatchesGolden`               | `NestedVaryingPrior` + parser `a[i, j]` end-to-end golden |
+| `nestedVaryingPriorRejectsThreeDimensions`   | v1 arity gate on `indexedBy.count == 2` |
+| `parser_parsesTwoArgSubscript`               | Lexer/parser support for `a[i, j]` |
 
 All under `Tests/SwiftStanTests/`.
 

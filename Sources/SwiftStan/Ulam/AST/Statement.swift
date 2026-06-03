@@ -189,6 +189,21 @@ public enum Statement: Hashable, Sendable {
                             rhosq: DistributionArg,
                             jitter: Double)
 
+  /// Nested-groupings prior (2026-06-03) — McElreath / brms
+  /// `a[country, region] ~ dnorm(a_bar, sigma_a)`. Declares the
+  /// parameter as `matrix[N_<indexedBy[0]>, N_<indexedBy[1]>] <name>;`
+  /// and emits `to_vector(<name>) ~ <distribution>(args);` as the iid
+  /// flat prior over every cell. Both columns in `indexedBy` are
+  /// registered as tightly-bounded integer index columns. v1 supports
+  /// exactly two grouping dimensions; the array shape (`indexedBy`
+  /// has length 2) is validated at classify time.
+  case nestedVaryingPrior(name: String,
+                          indexedBy: [String],
+                          countSymbols: [String?],
+                          distribution: Distribution,
+                          truncation: Truncation,
+                          useLpdf: Bool)
+
   /// User-supplied initial values for cmdstan's NUTS warmup
   /// (2026-06-02). Pure metadata — produces no Stan source. The pipeline
   /// emits a sibling `<model>.init.json` file and prepends `init=<path>`

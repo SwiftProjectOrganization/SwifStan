@@ -243,6 +243,8 @@ internal struct AlistEmitter {
       return "\(name)(\(canonicalExpression(arg)))"
     case .chainedIndexed(let name, let outer, let inner):
       return "\(name)[\(canonicalExpression(outer))][\(canonicalExpression(inner))]"
+    case .subscript2(let name, let idx1, let idx2):
+      return "\(name)[\(canonicalExpression(idx1)), \(canonicalExpression(idx2))]"
     }
   }
 

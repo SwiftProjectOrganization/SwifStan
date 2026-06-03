@@ -29,7 +29,12 @@ This file is a forward-looking checklist of work that's planned but not yet sche
 
 - [ ] `cores=` / parallel-chain control beyond cmdstan's existing pass-through arguments.
 
-- [ ] Nested groupings (`a[country, region]` style). Slightly different from two-grouping above; involves multi-dimensional index columns.
+- [x] ✅ **Nested groupings (`a[country, region]` style)** — shipped 2026-06-03. Adds `NestedVaryingPrior("a", indexedBy: ["country", "region"], .normal("a_bar", "sigma_a"))` DSL node that declares `matrix[N_country, N_region] a;` and emits the iid `to_vector(a) ~ normal(a_bar, sigma_a);` flat prior over every cell (reuses the existing `MatrixPrior` rendering path). The classify pass auto-derives `N_<col>` cardinality symbols for both index columns and tightens their bounds (`array[N] int<lower=1, upper=N_<col>>`). Adds `ExpressionNode.subscript2`, a `.comma` lexer token, parser support for `a[i, j]` (rejects 3+ comma-separated indices with `ExpressionParseError`), and loop-emission paths in `BlockEmitter.canLoopEmit` / `renderLoopBody` so `mu = a[country, region] + bX*x` lowers to `for (i in 1:N) { mu[i] = a[country[i], region[i]] + bX*x[i]; }`. Arity ≠ 2 throws `DataInferenceError.nestedVaryingPriorArity`. Deferred:
+
+  - **3+ grouping dimensions** (`a[country, region, year]` → `array[N1, N2, N3]`). Would need a more general n-arg subscript AST node and array-shape declarations rather than `matrix`.
+  - **Varying nested groupings** — a nested group paired with a vector prior (`array[N_c, N_r] vector[J]` for cell-wise vectors of coefficients).
+  - **Alist parser support** for `a[country, region] ~ dnorm(...)` in `.alist.R` files. Today only the Swift DSL exposes the surface; alist parser extension is a follow-up.
+  - **Non-canonical `a[country][region]` RHS shape** — explicitly rejected; not valid Stan for matrix parameters.
 
 - [ ] Crossed random effects with correlations — `LKJCorrCholeskyPrior` + `VaryingVectorPrior` are already in place; what remains is the multi-grouping index wiring and any alist-side `dlkjcorr` alias (see above).
 

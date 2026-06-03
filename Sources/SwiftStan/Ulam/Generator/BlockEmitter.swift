@@ -371,6 +371,16 @@ enum BlockEmitter {
                                        distribution: dist,
                                        truncation: trunc,
                                        useLpdf: useLpdf))
+      case .nestedVaryingPrior(let name, _, _, let dist, let trunc, let useLpdf):
+        // Nested groupings (2026-06-03): iid flat prior over every cell
+        // of the `matrix[N_<col1>, N_<col2>]` parameter via the same
+        // `to_vector(<name>) ~ <dist>;` idiom as MatrixPrior. The
+        // declaration shape lives in `matrixParameters` (set by
+        // DataInference), so parametersBlock emits it for free.
+        priors.append(try emitSampling(lhs: "to_vector(\(name))",
+                                       distribution: dist,
+                                       truncation: trunc,
+                                       useLpdf: useLpdf))
       case .covMatrixPrior:
         // SUR Slice B: no sampling statement — Stan's `cov_matrix`
         // declaration constraint (positive-definite) is enough to give
@@ -642,7 +652,7 @@ enum BlockEmitter {
          .matrixPrior, .covMatrixPrior, .lkjCorrCholeskyPrior,
          .wishartPrior, .varyingVectorPrior, .gaussianProcessPrior,
          .orderedCutpointsPrior, .simplexPrior, .monotonicEffect,
-         .inits:
+         .inits, .nestedVaryingPrior:
       // Distribution args are scalars in the current AST (literal or
       // symbol). For varying / vector / matrix / cov_matrix /
       // chol-factor / varying-vector / GP priors, the LHS is a vector-
@@ -727,6 +737,10 @@ enum BlockEmitter {
       // element access always forces the per-row loop emission path —
       // there's no Stan-vectorised form for `ab[cafe][1]`.
       return .loop
+    case .subscript2:
+      // Nested groupings (2026-06-03): `a[country, region]` matrix
+      // lookup is per-row scalar — same loop-emission rationale.
+      return .loop
     case .identifier, .literal:
       return .vectorise
     }
@@ -783,6 +797,9 @@ enum BlockEmitter {
       // (`ab[cafe][1]` is a scalar real), so it never participates in
       // vectorised vector-vs-vector arithmetic.
       return false
+    case .subscript2:
+      // Nested groupings: matrix lookup is per-row scalar.
+      return false
     }
   }
 
@@ -825,6 +842,19 @@ enum BlockEmitter {
                          knownVectorParameters: knownVectorParameters,
                          knownVaryingVectorParameters: knownVaryingVectorParameters)
           && canLoopEmit(inner,
+                         knownVectorParameters: knownVectorParameters,
+                         knownVaryingVectorParameters: knownVaryingVectorParameters)
+    case .subscript2(_, let idx1, let idx2):
+      // Nested groupings: `a[country, region]` matrix lookup. Recurse
+      // into both indices; the outer name is not checked here because
+      // matrix-parameter names aren't tracked in either
+      // `knownVectorParameters` (vector form) or
+      // `knownVaryingVectorParameters` (varying-vector form). The
+      // declaration shape is verified at DataInference time instead.
+      return canLoopEmit(idx1,
+                         knownVectorParameters: knownVectorParameters,
+                         knownVaryingVectorParameters: knownVaryingVectorParameters)
+          && canLoopEmit(idx2,
                          knownVectorParameters: knownVectorParameters,
                          knownVaryingVectorParameters: knownVaryingVectorParameters)
     case .identifier, .literal:
@@ -904,6 +934,17 @@ enum BlockEmitter {
                                          subscriptTargets: subscriptTargets,
                                          loopVar: loopVar)
       return "\(name)[\(outerRendered)][\(innerRendered)]"
+    case .subscript2(let name, let idx1, let idx2):
+      // Nested groupings: `a[country, region]` → `a[country[i], region[i]]`.
+      // Both index columns are subscripted via the standard data-vector
+      // path; the result is one Stan-valid matrix lookup.
+      let r1 = renderLoopBody(idx1,
+                              subscriptTargets: subscriptTargets,
+                              loopVar: loopVar)
+      let r2 = renderLoopBody(idx2,
+                              subscriptTargets: subscriptTargets,
+                              loopVar: loopVar)
+      return "\(name)[\(r1), \(r2)]"
     }
   }
 
@@ -960,6 +1001,7 @@ enum BlockEmitter {
     case .simplexPrior(let name, _):             return name
     case .monotonicEffect(let name, _, _, _, _): return name
     case .inits:                              return ""
+    case .nestedVaryingPrior(let name, _, _, _, _, _): return name
     case .link(_, let lhs, _):                return lhs
     case .deterministic(let lhs, _):          return lhs
     }

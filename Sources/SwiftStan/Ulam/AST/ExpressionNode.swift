@@ -28,6 +28,16 @@ internal indirect enum ExpressionNode: Hashable, Sendable {
   case chainedIndexed(name: String,
                       outerIndex: ExpressionNode,
                       innerIndex: ExpressionNode)
+  /// Nested-groupings 2-arg matrix indexing (2026-06-03): `a[i, j]`
+  /// against a `matrix[K, J]`-typed parameter (typically a
+  /// `NestedVaryingPrior` over (country, region) etc.). v1 supports
+  /// the 2-arg case only; 3+ comma-separated indices are rejected by
+  /// the parser. Distinct from `.chainedIndexed` — Stan rejects
+  /// `a[i][j]` chained form on matrix parameters; the comma form is
+  /// the only valid shape.
+  case subscript2(name: String,
+                  idx1: ExpressionNode,
+                  idx2: ExpressionNode)
 }
 
 internal enum Literal: Hashable, Sendable {
@@ -97,6 +107,14 @@ extension ExpressionNode {
                             isInsideIndex: insideIndex))
       outerIndex.collect(into: &uses, insideIndex: true)
       innerIndex.collect(into: &uses, insideIndex: true)
+    case .subscript2(let name, let idx1, let idx2):
+      // Nested-groupings: `a[i, j]` over a matrix parameter. Both
+      // indices are typically data columns (e.g. country / region).
+      uses.insert(SymbolUse(name: name,
+                            isIndexed: true,
+                            isInsideIndex: insideIndex))
+      idx1.collect(into: &uses, insideIndex: true)
+      idx2.collect(into: &uses, insideIndex: true)
     }
   }
 }

@@ -214,6 +214,44 @@ struct UlamExpressionParserTests {
     }
   }
 
+  // MARK: - Nested groupings 2-arg subscript (2026-06-03)
+
+  @Test func parser_parsesTwoArgSubscript() throws {
+    let node = try ExpressionParser.parse("a[country, region]")
+    guard case let .subscript2(name, idx1, idx2) = node else {
+      Issue.record("expected .subscript2; got \(node)"); return
+    }
+    #expect(name == "a")
+    #expect(idx1 == .identifier("country"))
+    #expect(idx2 == .identifier("region"))
+  }
+
+  @Test func parser_twoArgSubscriptInsideArithmetic() throws {
+    let node = try ExpressionParser.parse("a[country, region] + bX*x")
+    // Top-level should be `+`, with the `.subscript2` as the left
+    // operand of the addition.
+    guard case let .binary(op, left, _) = node, op == .add else {
+      Issue.record("expected top-level +; got \(node)"); return
+    }
+    guard case .subscript2 = left else {
+      Issue.record("expected left to be .subscript2; got \(left)"); return
+    }
+  }
+
+  @Test func parser_rejectsThreeArgSubscript() throws {
+    #expect(throws: ExpressionParseError.self) {
+      _ = try ExpressionParser.parse("a[i, j, k]")
+    }
+  }
+
+  @Test func symbolReferences_capturesBothSubscript2Indices() throws {
+    let node = try ExpressionParser.parse("a[country, region]")
+    let refs = node.symbolReferences()
+    #expect(refs.contains { $0.name == "a" && $0.isIndexed })
+    #expect(refs.contains { $0.name == "country" && $0.isInsideIndex })
+    #expect(refs.contains { $0.name == "region" && $0.isInsideIndex })
+  }
+
   // Note: the `Expression.parsed()` and `Expression.symbolReferences()`
   // convenience entry points are trivial delegates to the underlying
   // parser tested above. They'd be tested directly here but Foundation

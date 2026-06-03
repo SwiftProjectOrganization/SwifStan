@@ -170,6 +170,7 @@ enum DataInferenceError: Error, CustomStringConvertible {
   case nonCenteredWithTruncationUnsupported(name: String)
   case nonCenteredWithLpdfUnsupported(name: String)
   case constraintsConflictWithTruncation(name: String)
+  case nestedVaryingPriorArity(name: String, got: Int)
 
   var description: String {
     switch self {
@@ -202,6 +203,8 @@ enum DataInferenceError: Error, CustomStringConvertible {
       return "ulam: VaryingPrior '\(name)' combines nonCentered: true with useLpdf: true — the non-centred form requires the `~` sampling syntax on `<name>_raw`"
     case .constraintsConflictWithTruncation(let name):
       return "ulam: '\(name)' has both `constraints:` and `truncation:` set — pick one. `truncation:` already drives the parameter declaration constraint; `constraints:` exists for the case where you want the declaration constraint WITHOUT the redundant `T[…]` sampling suffix."
+    case .nestedVaryingPriorArity(let name, let got):
+      return "ulam: NestedVaryingPrior '\(name)' has indexedBy.count == \(got); v1 supports exactly two grouping dimensions"
     }
   }
 }
@@ -418,6 +421,36 @@ enum DataInference {
           wishartScaleColumns.insert(s)
           wishartScaleColumnDims[s] = dim
         }
+      case .nestedVaryingPrior(let name, let indexedBy, let countSymbols, let dist, let trunc, _):
+        // Nested groupings (2026-06-03): McElreath
+        // `a[country, region] ~ dnorm(a_bar, sigma_a)`. v1 requires
+        // exactly two grouping dimensions; declares
+        // `matrix[N_<col1>, N_<col2>] <name>;` and emits the iid
+        // `to_vector(<name>) ~ <dist>(args);` sampling line via
+        // `BlockEmitter.modelBlock`. Both index columns are bound for
+        // tightened `<lower=1, upper=N_<col>>` declarations.
+        guard indexedBy.count == 2, countSymbols.count == 2 else {
+          throw DataInferenceError.nestedVaryingPriorArity(
+            name: name, got: indexedBy.count)
+        }
+        if !parameters.contains(name) { parameters.append(name) }
+        let col1 = indexedBy[0]
+        let col2 = indexedBy[1]
+        let sym1 = countSymbols[0] ?? "N_\(col1)"
+        let sym2 = countSymbols[1] ?? "N_\(col2)"
+        matrixParameters[name] = (rows: sym1, cols: sym2)
+        if let existing = indexColumns[col1], existing != sym1 {
+          throw DataInferenceError.conflictingIndexColumnCardinality(column: col1)
+        }
+        if let existing = indexColumns[col2], existing != sym2 {
+          throw DataInferenceError.conflictingIndexColumnCardinality(column: col2)
+        }
+        indexColumns[col1] = sym1
+        indexColumns[col2] = sym2
+        referenced.insert(col1)
+        referenced.insert(col2)
+        for s in DistributionCatalog.symbolsReferenced(dist) { referenced.insert(s) }
+        for s in DistributionCatalog.symbolsReferenced(trunc) { referenced.insert(s) }
       case .varyingVectorPrior(let name, let indexedBy, let length, let countSymbol, let dist, let trunc, _):
         // Multivariate hierarchical priors Slice C: vector-valued
         // varying effects with a multivariate prior. Declares
@@ -714,6 +747,11 @@ enum DataInference {
       // already typed by its declaration. Walk both index expressions.
       collectMultiplicativeOperands(in: outer, into: &set)
       collectMultiplicativeOperands(in: inner, into: &set)
+    case .subscript2(_, let idx1, let idx2):
+      // Nested groupings: same rationale — the outer matrix name is
+      // already typed by its declaration; walk both index expressions.
+      collectMultiplicativeOperands(in: idx1, into: &set)
+      collectMultiplicativeOperands(in: idx2, into: &set)
     case .identifier, .literal:
       break
     }

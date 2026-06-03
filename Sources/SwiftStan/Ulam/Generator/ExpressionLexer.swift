@@ -24,6 +24,7 @@ internal struct Token: Equatable {
     case rightParen
     case leftBracket
     case rightBracket
+    case comma
     case eof
   }
 
@@ -103,6 +104,7 @@ internal enum ExpressionLexer {
       case ")": punctuation = .rightParen
       case "[": punctuation = .leftBracket
       case "]": punctuation = .rightBracket
+      case ",": punctuation = .comma
       default:  punctuation = nil
       }
       if let kind = punctuation {

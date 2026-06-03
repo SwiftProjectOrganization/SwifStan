@@ -147,6 +147,22 @@ private struct ParseState {
       case .leftBracket:
         _ = advance()
         let index = try parseExpression()
+        // Nested groupings (2026-06-03): comma after the first index
+        // → matrix-style two-arg subscript `name[i, j]`. v1 rejects
+        // 3+ comma-separated indices.
+        if peek().kind == .comma {
+          _ = advance()
+          let index2 = try parseExpression()
+          if peek().kind == .comma {
+            let t = peek()
+            throw ExpressionParseError.unexpectedToken(
+              found: t.lexeme,
+              expected: "']' (3+ comma-separated indices are not supported in v1)",
+              position: t.position)
+          }
+          _ = try expect(.rightBracket, "']'")
+          return .subscript2(name: name, idx1: index, idx2: index2)
+        }
         _ = try expect(.rightBracket, "']'")
         // Multivariate hierarchical priors Slice D: peek for a second
         // bracket — `name[outer][inner]` becomes a `.chainedIndexed`
