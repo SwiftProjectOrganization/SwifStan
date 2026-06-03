@@ -50,28 +50,40 @@ public func stanSummary(dirUrl: URL,
 /// means downstream stansummary / samples-cleanup don't need to know
 /// the chain count up front. Sort is numeric on the trailing chain id
 /// so 10+ chains don't reorder ahead of single-digits.
+///
+/// Matching is **case-insensitive** because the default macOS APFS
+/// volume is case-preserving but case-insensitive: a file originally
+/// created as `bernoulli_output_1.csv` keeps that display name even
+/// when the binary now writes through `Bernoulli_output_1.csv`. A
+/// case-sensitive `hasPrefix` would miss the stale-cased entries and
+/// the post-sample glob would return empty.
 func chainOutputFiles(dirUrl: URL, modelName: String) -> [URL] {
   let fm = FileManager.default
   guard let entries = try? fm.contentsOfDirectory(atPath: dirUrl.path) else {
     return []
   }
-  let single = "\(modelName)_output.csv"
-  let multiPrefix = "\(modelName)_output_"
-  let candidates = entries.filter {
-    $0 == single || ($0.hasPrefix(multiPrefix) && $0.hasSuffix(".csv"))
+  let singleLower = "\(modelName)_output.csv".lowercased()
+  let multiPrefixLower = "\(modelName)_output_".lowercased()
+  let candidates = entries.filter { name in
+    let lower = name.lowercased()
+    return lower == singleLower
+        || (lower.hasPrefix(multiPrefixLower) && lower.hasSuffix(".csv"))
   }
   return candidates
-    .sorted { lhs, rhs in chainId(lhs, multiPrefix: multiPrefix)
-                       < chainId(rhs, multiPrefix: multiPrefix) }
+    .sorted { lhs, rhs in chainId(lhs, multiPrefix: multiPrefixLower)
+                       < chainId(rhs, multiPrefix: multiPrefixLower) }
     .map { dirUrl.appendingPathComponent($0) }
 }
 
 /// Extract the chain id from a chain-output filename. `_output.csv` →
 /// 0; `_output_<N>.csv` → N. Unparseable trailing components return
 /// `Int.max` so they sort to the end and don't shift earlier files.
+/// `multiPrefix` is the lowercased multi-chain prefix; the filename is
+/// lowercased for comparison so case-mixed inputs sort correctly.
 private func chainId(_ filename: String, multiPrefix: String) -> Int {
-  guard filename.hasPrefix(multiPrefix) else { return 0 }
-  let middle = filename
+  let lower = filename.lowercased()
+  guard lower.hasPrefix(multiPrefix) else { return 0 }
+  let middle = lower
     .dropFirst(multiPrefix.count)
     .dropLast(".csv".count)
   return Int(middle) ?? .max
