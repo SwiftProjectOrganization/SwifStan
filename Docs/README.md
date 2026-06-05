@@ -14,16 +14,18 @@ This project is work in progress!!! Work still to be done can be found in [TODO]
 **1. Cmdstan pipeline related commands:**  
 
 ```gfm
-| ------------ | ----------------------------------------- |
-| Command      | Effect                                    |
-| ------------ | ----------------------------------------- |
-| compile      | Compile a Stan model                      |
-| sample       | Sample from a compiled model              |
-| stansummary  | Stansummary on a sampled model            |
-| optimize     | Optimize a compiled model                 |
-| pathfinder   | Pathfinder on a compiled model            |
-| laplace      | Laplace approximation on a compiled model |
-| ------------ | ----------------------------------------- |
+| ------------ | ------------------------------------------ |
+| Command      | Effect                                     |
+| ------------ | ------------------------------------------ |
+| compile      | Compile a Stan model                       |
+| sample       | Sample from a compiled model               |
+| stansummary  | Stansummary on a sampled model             |
+| optimize     | Optimize a compiled model                  |
+| pathfinder   | Pathfinder on a compiled model             |
+| laplace      | Laplace approximation on a compiled model  |
+| runinfo      | Read <name>_output_config.json into a      |
+|              | typed RunInfo and write <name>.runinfo.json |
+| ------------ | ------------------------------------------ |
 ```
   
 **2. Ulam pipeline related commands:**
@@ -60,6 +62,20 @@ This project is work in progress!!! Work still to be done can be found in [TODO]
   6. The cmdstan pipeline only uses files in `"~/Documents/<STAN_CASES>/Results"`.
   7. The ulam pipeline looks for files in `"~/Documents/<STAN_CASES>/Preliminaries"`. Produced files end up in either Preliminaries (`"<Name>.ulam.swift"`) or in Result ( `"<name>.stan"` and `"<name>.data.json"`.
   8. Run `csv2json` preferably after a .stan file has been set up. In that case the .data.json file reflects what is needed. It also adds 'N', the number of observations.
+
+
+## Per-invocation logs
+
+Every cmdstan call (`compile`, `sample`, `optimize`, `laplace`, `pathfinder`, `stansummary`) writes its raw stdout and stderr to the model's `Results/` directory as:
+
+```
+Results/<name>.<method>.log         # captured stdout
+Results/<name>.<method>.error.log   # captured stderr
+```
+
+Both files are written on every run (zero bytes means "ran but emitted nothing"); each invocation overwrites the previous log. cmdstan emits most diagnostics (warmup banners, divergence messages, treedepth warnings) to **stdout**, so the `.log` file is normally where to look first; `.error.log` is reserved for hard failures and a few compile-time messages.
+
+For sample-method runs that set `save_cmdstan_config=true` (the default for `swiftstan sample`), cmdstan additionally writes `<Name>_output_config.json` to the same directory. The `runinfo` subcommand reads that JSON into a typed `RunInfo` value and writes a portable, basename-pathed `<name>.runinfo.json` alongside.
 
 
 ## Working environment  
@@ -153,11 +169,13 @@ SUBCOMMANDS:
   sample                    Sample the Stan model.
   optimize                  Optimize the Stan model.
   pathfinder                Use Pathfinder approximation.
+  laplace                   Run cmdstan's Laplace approximation on a compiled model.
   stansummary               Run the Stan summary program.
   csv2json                  Read Preliminaries/<name>.csv, writes Results/<name>.data.json.
   dsl2stan                  Compile a Preliminaries/*.ulam.swift, write Results/<name>.stan.
   alist2dsl                 Translate Preliminaries/<name>.alist.R into  Preliminaries/<Name>.ulam.swift.
   stancode                  Translate Preliminaries/<name>.alist.R straight to Results/<name>.stan (in-process, no swiftc).
+  runinfo                   Read Results/<name>_output_config.json and write a cleaned Results/<name>.runinfo.json.
   ulam                      Run one of the built-in ulam DSL demos (--model Bernoulli|Poisson|Binomial|UCB|Dmvnorm).
   test (default)            Test the CLI functions.
 
