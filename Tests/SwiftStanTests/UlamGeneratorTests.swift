@@ -1437,7 +1437,7 @@ struct UlamGeneratorTests {
             "expected NO T[0, …] suffix on VaryingPrior sampling line")
   }
 
-  /// `start:` per-prior flows into `<model>.init.json` via the same
+  /// `start:` per-prior flows into `<name>.init.json` via the same
   /// `InferredModel.initValues` dict that `Inits([:])` populates.
   @Test func startKwargFlowsIntoInitJSON() throws {
     let data: UlamData = [
@@ -1704,7 +1704,7 @@ struct UlamArtifactEmissionTests {
   /// Runs `ulam()` end-to-end and verifies the artifacts the pipeline
   /// produces under the V2.1 layout: `<root>/<name>/Results/<name>.stan`
   /// and `<name>.data.json`. In addition this helper writes the
-  /// `<Model>.ulam.swift` smoke driver into `<root>/<name>/Preliminaries/`
+  /// `<Name>.ulam.swift` smoke driver into `<root>/<name>/Preliminaries/`
   /// — the "ulam input" alongside the generated outputs.
   static func runUlamAndCheckArtifacts(name: String,
                                        filenameStem: String,

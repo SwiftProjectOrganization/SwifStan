@@ -4,10 +4,10 @@
 //
 //  Slice γ of Docs/StancodeCommandPlan.md. CLI-side wrapper for the
 //  in-process alist → UlamModel → stancode fast path. Reads
-//  `Preliminaries/<model>.alist.R`, runs the alist parser chain
+//  `Preliminaries/<name>.alist.R`, runs the alist parser chain
 //  (lex → parse → lower → classify → AlistToUlamModel), then calls
 //  the existing `stancode(_: UlamModel) throws -> String` generator
-//  and writes `Results/<model>.stan`.
+//  and writes `Results/<name>.stan`.
 //
 //  Skips the smoke-driver hop entirely — no swiftc, no subprocess.
 //  The hand-authored `.ulam.swift` workflow stays first-class via

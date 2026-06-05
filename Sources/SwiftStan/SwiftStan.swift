@@ -39,7 +39,7 @@ struct OptionsCompile: ParsableArguments {
   
   @Flag(
     name: [.customLong("install"), .customShort("I")],
-    help: "Install a `<model>.stan` file before compiling."
+    help: "Install a `<name>.stan` file before compiling."
   )
   var install: Bool = false
   
@@ -67,7 +67,7 @@ struct OptionsSample: ParsableArguments {
   
   @Flag(
     name: [.customLong("install"), .customShort("I")],
-    help: "Install a `<model>.data.json` before sampling."
+    help: "Install a `<name>.data.json` before sampling."
   )
   var install: Bool = false
   
@@ -326,7 +326,7 @@ extension SwiftStan {
   struct Csv2Json: ParsableCommand {
     static let configuration = CommandConfiguration(
       commandName: "csv2json",
-      abstract: "Read Preliminaries/<model>.csv, validate against Results/<model>.stan, write Results/<model>.data.json.")
+      abstract: "Read Preliminaries/<name>.csv, validate against Results/<name>.stan, write Results/<name>.data.json.")
 
     @OptionGroup var options: OptionsLimited
 
@@ -346,7 +346,7 @@ extension SwiftStan {
   struct Stancode: ParsableCommand {
     static let configuration = CommandConfiguration(
       commandName: "stancode",
-      abstract: "Translate Preliminaries/<model>.alist.R straight to Results/<model>.stan (in-process, no swiftc).")
+      abstract: "Translate Preliminaries/<name>.alist.R straight to Results/<name>.stan (in-process, no swiftc).")
 
     @OptionGroup var options: OptionsLimited
 
@@ -366,7 +366,7 @@ extension SwiftStan {
   struct Alist2Dsl: ParsableCommand {
     static let configuration = CommandConfiguration(
       commandName: "alist2dsl",
-      abstract: "Translate Preliminaries/<model>.alist.R into Preliminaries/<Model>.ulam.swift.")
+      abstract: "Translate Preliminaries/<name>.alist.R into Preliminaries/<Name>.ulam.swift.")
 
     @OptionGroup var options: OptionsLimited
 
@@ -386,7 +386,7 @@ extension SwiftStan {
   struct Dsl2Stan: ParsableCommand {
     static let configuration = CommandConfiguration(
       commandName: "dsl2stan",
-      abstract: "Compile a Preliminaries/*.ulam.swift smoke driver and write its Stan source to Results/<model>.stan.")
+      abstract: "Compile a Preliminaries/*.ulam.swift smoke driver and write its Stan source to Results/<name>.stan.")
 
     @OptionGroup var options: OptionsLimited
 

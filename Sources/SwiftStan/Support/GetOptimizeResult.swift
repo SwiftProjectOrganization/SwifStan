@@ -6,11 +6,11 @@
 //
 //  V2.1 follow-up (2026-05-29): split the raw cmdstan output from the
 //  cleaned post-processed version into separate files. cmdstan writes
-//  `<model>_optimize.csv` with `#` comment-line metadata; we read it
-//  and write the comment-stripped version to `<model>.optimize.csv`.
-//  Matches the existing samples convention (`<model>_output_N.csv`
-//  raw, `<model>.samples.csv` clean). Also means
-//  `<model>_optimize.csv` is always a valid `mode=` source for
+//  `<name>_optimize.csv` with `#` comment-line metadata; we read it
+//  and write the comment-stripped version to `<name>.optimize.csv`.
+//  Matches the existing samples convention (`<name>_output_N.csv`
+//  raw, `<name>.samples.csv` clean). Also means
+//  `<name>_optimize.csv` is always a valid `mode=` source for
 //  cmdstan's `laplace` subcommand — the previous in-place overwrite
 //  was the trap behind the laplace bug.
 //

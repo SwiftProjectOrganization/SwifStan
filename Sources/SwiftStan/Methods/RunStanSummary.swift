@@ -5,11 +5,11 @@
 //  Created by Robert Goedman on 10/30/25.
 //
 //  V2.1 follow-up (2026-05-29): the raw cmdstan stansummary output
-//  now lands at `<model>_stansummary.csv` (was `<model>_summary.csv`)
+//  now lands at `<name>_stansummary.csv` (was `<name>_summary.csv`)
 //  so the `_raw` / `.clean` split convention is uniform with
 //  optimize/laplace/pathfinder. The post-processor in
 //  `ExtractStanSummary.swift` reads it and writes the cleaned
-//  `<model>.stansummary.csv` alongside.
+//  `<name>.stansummary.csv` alongside.
 //
 
 import Foundation
@@ -45,8 +45,8 @@ public func stanSummary(dirUrl: URL,
 }
 
 /// Enumerate cmdstan's per-chain output files for a model, in chain-id
-/// order. cmdstan writes `<model>_output.csv` for `num_chains=1` and
-/// `<model>_output_<N>.csv` for `num_chains>1`. Globbing both patterns
+/// order. cmdstan writes `<name>_output.csv` for `num_chains=1` and
+/// `<name>_output_<N>.csv` for `num_chains>1`. Globbing both patterns
 /// means downstream stansummary / samples-cleanup don't need to know
 /// the chain count up front. Sort is numeric on the trailing chain id
 /// so 10+ chains don't reorder ahead of single-digits.

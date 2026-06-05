@@ -3,8 +3,8 @@
 //  StanTests
 //
 //  Direct tests for `stanSummary(...)` — the wrapper around cmdstan's
-//  `stansummary` binary. Reads four `<model>_output_<i>.csv` chain
-//  files and writes a `<model>_stansummary.csv` aggregate. Happy
+//  `stansummary` binary. Reads four `<name>_output_<i>.csv` chain
+//  files and writes a `<name>_stansummary.csv` aggregate. Happy
 //  path: run a tiny sample then summarise. Failure path: invoke with
 //  no chain files present — cmdstan stansummary exits non-zero and
 //  the wrapper surfaces it.
@@ -39,7 +39,7 @@ struct StansummaryCommandTests {
   """
 
   /// Compile + sample so the four chain outputs exist, then summarise.
-  /// Asserts the raw `<model>_stansummary.csv` lands.
+  /// Asserts the raw `<name>_stansummary.csv` lands.
   @Test func stanSummarySucceedsOnExistingChains() throws {
     let model = "stansummary_ok_test"
     let paths = casePaths(for: model)
@@ -79,7 +79,7 @@ struct StansummaryCommandTests {
             "stansummary CSV should exist at \(summaryURL.path)")
   }
 
-  /// 2026-06-02: `chainOutputFiles` globs `<model>_output*.csv` and
+  /// 2026-06-02: `chainOutputFiles` globs `<name>_output*.csv` and
   /// sorts numerically so chain 10+ doesn't reorder ahead of chain 2.
   /// Also matches the `_output.csv` (no suffix) form cmdstan writes
   /// for single-chain runs.

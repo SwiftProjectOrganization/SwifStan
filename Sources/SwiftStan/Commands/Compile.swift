@@ -61,7 +61,7 @@ public func compile(model: String = "bernoulli",
   } else {
     if result.1 != "" {
       printResult(result)
-      exit(8) // Check for <model>.stan failed
+      exit(8) // Check for <name>.stan failed
     }
   }
 

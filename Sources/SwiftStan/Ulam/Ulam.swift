@@ -11,7 +11,7 @@
 //
 //  - `ulamPipeline(model: String, ...)` — V2.1 file path. Chains
 //    `dsl2stan → csv2json → compile → sample` against the
-//    `<root>/<model>/{Preliminaries,Results}/` layout. The `make`-style
+//    `<root>/<name>/{Preliminaries,Results}/` layout. The `make`-style
 //    staleness check skips regeneration when the inputs haven't moved.
 //
 //  Both write into `Results/`; the file orchestrator additionally reads
@@ -81,12 +81,12 @@ public func ulam(_ model: UlamModel,
                 install: false)
 }
 
-/// V2.1 file-based orchestrator. Resolves `<root>/<model>/{Preliminaries,Results}/`
+/// V2.1 file-based orchestrator. Resolves `<root>/<name>/{Preliminaries,Results}/`
 /// via `casePaths(for:)` and chains the four-step pipeline:
 ///
-///   dsl2stan  ←  Preliminaries/*.ulam.swift   → Results/<model>.stan
-///   csv2json  ←  Preliminaries/<model>.csv +
-///                Results/<model>.stan        → Results/<model>.data.json
+///   dsl2stan  ←  Preliminaries/*.ulam.swift   → Results/<name>.stan
+///   csv2json  ←  Preliminaries/<name>.csv +
+///                Results/<name>.stan        → Results/<name>.data.json
 ///   compile + sample over Results/
 ///
 /// Each step runs only when its inputs are newer than its outputs (or
@@ -112,12 +112,12 @@ public func ulamPipeline(model: String,
 
   // 1. Path selection — option 2 from Docs/StancodeCommandPlan.md.
   //
-  //    If a `<model>.alist.R` exists, prefer the in-process `stancode`
+  //    If a `<name>.alist.R` exists, prefer the in-process `stancode`
   //    fast path (`alist.R → UlamModel → .stan`). This skips the
   //    smoke-driver hop and the swiftc invocation entirely.
   //
   //    Otherwise, fall back to `dsl2stan` against a hand-authored
-  //    `<Model>.ulam.swift`. Users who want the smoke driver from an
+  //    `<Name>.ulam.swift`. Users who want the smoke driver from an
   //    alist still run `stan alist2dsl` explicitly.
   if fm.fileExists(atPath: alistURL.path) {
     if isStale(input: alistURL, output: stanURL) {

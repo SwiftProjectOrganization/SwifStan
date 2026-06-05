@@ -41,7 +41,7 @@ enum InitMarshaller {
 /// Render a model's user-supplied warmup inits as a JSON string. Used
 /// by the auto-generated smoke driver to print the init JSON to stdout
 /// (after the Stan source and a separator), so `dsl2stan` can write
-/// both `<model>.stan` and `<model>.init.json` from one pass. Returns
+/// both `<name>.stan` and `<name>.init.json` from one pass. Returns
 /// an empty string when the model has no `.inits(...)` statements.
 public func stanInits(_ model: UlamModel) throws -> String {
   let inferred = try DataInference.classify(model)

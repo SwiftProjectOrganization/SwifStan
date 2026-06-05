@@ -2,10 +2,10 @@
 //  Csv2Json.swift
 //  Stan
 //
-//  V2.1 Slice C: read `Preliminaries/<model>.csv`, validate column
-//  coverage against `Results/<model>.stan`'s data block, derive the
+//  V2.1 Slice C: read `Preliminaries/<name>.csv`, validate column
+//  coverage against `Results/<name>.stan`'s data block, derive the
 //  cardinality scalars (`N`, `N_<col>`), and write
-//  `Results/<model>.data.json`.
+//  `Results/<name>.data.json`.
 //
 //  The schema source-of-truth is the generated `.stan`. csv2json
 //  therefore runs *after* dsl2stan in the V2.1 orchestrator.

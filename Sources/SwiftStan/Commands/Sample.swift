@@ -24,6 +24,7 @@ public func sample(model: String,
   let defaults: [(key: String, value: String)] = [
     ("num_chains", "4"),
     ("num_samples", "1000"),
+    ("num_threads", "6")
   ]
   for (key, value) in defaults
   where !args.contains(where: { $0.hasPrefix("\(key)=") }) {

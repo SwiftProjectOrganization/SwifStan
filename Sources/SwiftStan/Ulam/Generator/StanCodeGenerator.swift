@@ -4,7 +4,7 @@
 //
 //  Phase 1 of the ulam port: the public, pure (UlamModel) -> String
 //  generator. No file I/O, no cmdstan. Phase 2 adds the orchestrator that
-//  writes <model>.stan and hands off to compile() / sample().
+//  writes <name>.stan and hands off to compile() / sample().
 //
 
 import Foundation

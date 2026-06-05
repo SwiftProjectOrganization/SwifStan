@@ -1,24 +1,28 @@
-# Ulam DSL Manual
+# Ulam and DSL Manual
 
 ## Purpose
 
-The Ulam DSL is a Swift port of McElreath's R `ulam()` (from the `rethinking` package). It lets you describe a Bayesian model with a small Swift result-builder DSL, then generate Stan source, a Stan-compatible data JSON, and (optionally) drive cmdstan compile + sample end-to-end.
+The Ulam method and an intermittent DSL is part of a Swift port of McElreath's `ulam()` implementation (from the `rethinking` R package). It lets you describe a Bayesian model with a (small?) Swift result-builder DSL, then generate Stan Language model, a Stan-compatible data JSON input data file, and (optionally) use the cmdstan pipeline to compile and sample end-to-end.
 
 This document is the per-construct reference. Each section has the same shape:
 
 1. **Purpose** — what the construct expresses in modelling terms.
 2. **Signature** — the public Swift initialiser.
 3. **Arguments** — what each parameter does.
-4. **Emitted Stan** — the corresponding lines in the generated `<model>.stan`.
+4. **Emitted Stan** — the corresponding lines in the generated `<name>.stan`.
 
-The overall flow is covered in [`Planning docs/UlamPortPlan.md`](Planning%20docs/UlamPortPlan.md); this manual focuses on *how to call each piece*.
+---
+
+## Status
+
+The cmdstan pipeline is fairly solid, the ulam pipeline is highly experimental. The test suite currently covers a bit more than 100 tests mostly related to testing the ulam pipeline on Statistical Rethinking examples in chapters 10 through 14. These examples were also used by Claude to construct the port of the pipeline. So many more tests will be needed!
 
 ---
 
 ## Workflow at a glance
 
 ```swift
-import Stan
+import SwiftStan
 
 let data: UlamData = [
   "y": .integer([0, 1, 0, 1, 1]),
@@ -85,8 +89,8 @@ model { ... }
 Three top-level entry points:
 
 - **`stancode(_:)`** — pure, no I/O. Returns the generated Stan source as a `String`. Useful for inspecting the generator's output, debugging, or testing.
-- **`ulam(_:name:...)`** — V1 in-process pipeline. Takes an `UlamModel` value, writes `<name>.stan` + `<name>.data.json` under `<STAN_CASES>/<name>/Results/`, then invokes `compile()` + `sample()` against your cmdstan install.
-- **`ulamPipeline(model: String, ...)`** — V2.1 file-based pipeline. Chains `alist2dsl → dsl2stan → csv2json → compile → sample` against the `<STAN_CASES>/<model>/{Preliminaries,Results}/` layout, skipping steps whose outputs are newer than their inputs.
+- **`ulam(_:name:...)`** — In-process ulam pipeline. Takes an `UlamModel` value, writes `<name>.stan` + `<name>.data.json` under `<STAN_CASES>/<name>/Results/`, then invokes `compile()` + `sample()` using the cmdstan pipeline.
+- **`ulamPipeline(model: String, ...)`** — File-based ulam pipeline. Chains `alist2dsl → dsl2stan → csv2json → compile → sample` against the `<STAN_CASES>/<name>/{Preliminaries,Results}/` layout, skipping steps whose outputs are newer than their inputs.
 
 ### Signature
 
@@ -278,7 +282,7 @@ public struct Prior: ModelStatement {
 - `distribution` — the prior distribution (e.g. `.normal(0, 1.5)`).
 - `truncation` — optional `T[...]` suffix; ALSO propagates into the `parameters{}` declaration as a `<lower=...>` / `<upper=...>` constraint.
 - `constraints` *(2026-06-03)* — declaration-only `<lower=…, upper=…>` constraint. Same shape as `Truncation` but emits **only** on the parameter declaration — no `T[…]` sampling suffix. Use when the prior's support already enforces the bound and the sampling-line truncation is redundant (`.exponential` on lower=0, `.beta` on (0, 1)). Mutually exclusive with `truncation:` — the classify pass throws `DataInferenceError.constraintsConflictWithTruncation` if both are non-empty.
-- `start` *(2026-06-03)* — per-prior NUTS warmup init value, merged into `Results/<model>.init.json`. Equivalent to a single entry in `Inits([:])` co-located with the prior; a later `Inits([:])` block overlays by walk order.
+- `start` *(2026-06-03)* — per-prior NUTS warmup init value, merged into `Results/<name>.init.json`. Equivalent to a single entry in `Inits([:])` co-located with the prior; a later `Inits([:])` block overlays by walk order.
 - `useLpdf` — emit `target += ..._lpdf(name | args)` instead of `name ~ ...`.
 
 #### Emitted Stan
@@ -316,7 +320,7 @@ model {
 }
 ```
 
-`Prior("mu", .normal(178, 20), start: 178.0)` → unchanged Stan source, but `Results/<model>.init.json` includes `{"mu": 178.0}` and the cmdstan binary picks it up via the auto-detected `init=<path>` flag.
+`Prior("mu", .normal(178, 20), start: 178.0)` → unchanged Stan source, but `Results/<name>.init.json` includes `{"mu": 178.0}` and the cmdstan binary picks it up via the auto-detected `init=<path>` flag.
 
 Multiple priors on the same `name` with disagreeing truncations or constraints are rejected (`DataInferenceError.conflictingParameterConstraints`). Co-setting `truncation:` and `constraints:` on the same prior throws `DataInferenceError.constraintsConflictWithTruncation`. Worked examples: `constraintsDeclareLowerWithoutTruncationSuffix`, `startKwargFlowsIntoInitJSON`, `initsOverridesPerPriorStart`.
 
@@ -354,7 +358,7 @@ public struct VaryingPrior: ModelStatement {
 - `countSymbol` — override the auto-derived `N_<indexedBy>` cardinality symbol (e.g. `countSymbol: "K"` to get `vector[K] <name>;`).
 - `truncation` — optional `T[...]` suffix. Rejected when combined with `nonCentered: true`.
 - `constraints` *(2026-06-03)* — declaration-only `<lower=…, upper=…>`, applied to the `vector<…>[N_<col>]` form. Same semantics as on `Prior`: declaration only, no `T[…]` suffix; mutually exclusive with `truncation:`.
-- `start` *(2026-06-03)* — per-prior init value merged into `<model>.init.json` for the vector parameter. (cmdstan accepts a scalar init for a vector parameter — every entry is initialised to the same value.)
+- `start` *(2026-06-03)* — per-prior init value merged into `<name>.init.json` for the vector parameter. (cmdstan accepts a scalar init for a vector parameter — every entry is initialised to the same value.)
 - `useLpdf` — `target += _lpdf` form. Rejected when combined with `nonCentered: true`.
 - `nonCentered` — emit the Matt Trick reparameterisation (see below).
 
@@ -728,7 +732,7 @@ The Dirichlet's `alpha` vector (supplied as `.realVector(length: K_edu, values: 
 
 #### Purpose
 
-User-supplied NUTS warmup starting points for cmdstan. cmdstan's default unconstrained init range U(-2, 2) is too narrow when the posterior lives far from 0 (e.g. McElreath's m4.1 over Howell1 with `mu ~ Normal(178, 20)`). The pipeline writes `Results/<model>.init.json` and cmdstan auto-picks it up via the `init=<path>` flag. v1 supports scalar Double values only.
+User-supplied NUTS warmup starting points for cmdstan. cmdstan's default unconstrained init range U(-2, 2) is too narrow when the posterior lives far from 0 (e.g. McElreath's m4.1 over Howell1 with `mu ~ Normal(178, 20)`). The pipeline writes `Results/<name>.init.json` and cmdstan auto-picks it up via the `init=<path>` flag. v1 supports scalar Double values only.
 
 #### Signature
 
@@ -1003,7 +1007,7 @@ Each demo is also tested as a round-trip golden in `Tests/SwiftStanTests/UlamGen
 | `V2WorkflowTests.howellPipelineEndToEnd`     | `Inits([:])` warmup-init knob with R-hat assertion |
 | `constraintsDeclareLowerWithoutTruncationSuffix` | `Prior(constraints:)` declaration-only `<lower=…>` |
 | `varyingPriorConstraintsDeclareLowerOnVectorType` | `VaryingPrior(constraints:)` on vector-typed parameter |
-| `startKwargFlowsIntoInitJSON`                | Per-prior `start:` flows into `<model>.init.json` |
+| `startKwargFlowsIntoInitJSON`                | Per-prior `start:` flows into `<name>.init.json` |
 | `initsOverridesPerPriorStart`                | `Inits([:])` overlays per-prior `start:` |
 | `constraintsAndTruncationOnSamePriorRejected` | Reject co-set `constraints:` + `truncation:` |
 | `nestedGroupingsMatchesGolden`               | `NestedVaryingPrior` + parser `a[i, j]` end-to-end golden |

@@ -3,9 +3,9 @@
 //  Stan
 //
 //  V2.1 Slice D: compile the smoke driver in
-//  `<root>/<model>/Preliminaries/*.ulam.swift` via `swiftc`, run the
+//  `<root>/<name>/Preliminaries/*.ulam.swift` via `swiftc`, run the
 //  resulting binary to capture its Stan source on stdout, and write
-//  that to `<root>/<model>/Results/<model>.stan`.
+//  that to `<root>/<name>/Results/<name>.stan`.
 //
 //  The smoke driver is a self-contained `@main` Swift program that
 //  builds an `UlamModel` and prints `stancode(model)` to stdout. The
@@ -43,7 +43,7 @@ public enum Dsl2StanError: Error, CustomStringConvertible {
 }
 
 /// Compile + run the model's smoke driver, capture stdout, write
-/// `Results/<model>.stan`. Returns the URL of the written file.
+/// `Results/<name>.stan`. Returns the URL of the written file.
 @discardableResult
 public func dsl2stan(model: String, verbose: Bool = false) throws -> URL {
   let paths = casePaths(for: model)

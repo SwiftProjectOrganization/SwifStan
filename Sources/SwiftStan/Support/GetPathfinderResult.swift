@@ -5,9 +5,9 @@
 //  Created by Robert Goedman on 11/20/25.
 //
 //  V2.1 follow-up (2026-05-29): matches the optimize/laplace split.
-//  Reads the raw cmdstan output at `<model>_pathfinder.csv` and
+//  Reads the raw cmdstan output at `<name>_pathfinder.csv` and
 //  writes the comment-stripped version to a sibling
-//  `<model>.pathfinder.csv`. The raw file is preserved unchanged.
+//  `<name>.pathfinder.csv`. The raw file is preserved unchanged.
 //
 
 import Foundation

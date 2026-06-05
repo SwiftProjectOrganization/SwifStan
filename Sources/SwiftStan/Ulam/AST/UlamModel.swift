@@ -12,7 +12,7 @@
 //      }
 //
 //  Phase 1 only holds the AST + data. Phase 2 adds orchestration that
-//  writes <model>.stan / <model>.data.json and invokes compile / sample.
+//  writes <name>.stan / <name>.data.json and invokes compile / sample.
 //
 
 import Foundation

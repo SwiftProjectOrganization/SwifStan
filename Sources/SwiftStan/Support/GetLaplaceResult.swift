@@ -5,11 +5,11 @@
 //  Slice γ of Docs/Planning docs/LaplaceCommandPlan.md (refactored
 //  2026-05-29 to match the optimize split).
 //
-//  Reads the raw cmdstan output at `<model>_laplace.csv` and writes
-//  the comment-stripped version to a sibling `<model>.laplace.csv`
+//  Reads the raw cmdstan output at `<name>_laplace.csv` and writes
+//  the comment-stripped version to a sibling `<name>.laplace.csv`
 //  (dot). The raw file is preserved unchanged, matching the
 //  GetOptimizeResult convention and the samples convention
-//  (`<model>_output_N.csv` raw, `<model>.samples.csv` clean).
+//  (`<name>_output_N.csv` raw, `<name>.samples.csv` clean).
 //
 
 import Foundation

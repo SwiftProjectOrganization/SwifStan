@@ -115,7 +115,7 @@ struct InferredModel {
   let squareMatrixColumns: Set<String>
   /// User-supplied NUTS warmup inits (2026-06-02). Collected from any
   /// `.inits(...)` statements (last-write-wins on duplicate keys). The
-  /// pipeline marshals these into `Results/<model>.init.json`; cmdstan
+  /// pipeline marshals these into `Results/<name>.init.json`; cmdstan
   /// auto-picks the file up via the `init=<path>` flag.
   let initValues: [String: Double]
 }
@@ -535,7 +535,7 @@ enum DataInference {
       case .inits(let values):
         // 2026-06-02: collect user-supplied warmup inits. No symbol
         // references, no parameter declarations — pure metadata that
-        // the marshaller turns into `<model>.init.json`.
+        // the marshaller turns into `<name>.init.json`.
         for (k, v) in values { initValues[k] = v }
       case .link(_, let lhs, let rhs):
         if !derived.contains(lhs) { derived.append(lhs) }

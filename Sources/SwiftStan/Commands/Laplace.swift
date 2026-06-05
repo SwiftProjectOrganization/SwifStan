@@ -10,19 +10,19 @@
 //  orchestrator:
 //
 //   1. If the user passed `mode=…` in `arguments`, use it verbatim.
-//   2. Otherwise, ensure `Results/<model>_optimize.csv` exists *and*
+//   2. Otherwise, ensure `Results/<name>_optimize.csv` exists *and*
 //      still carries cmdstan's `#`-prefixed header (the mode= reader
 //      uses those header lines to recognise the file — without them
 //      cmdstan rejects it as "CSV file is not output from Stan
 //      optimization"). If either condition is missing, run
 //      `stanOptimize` to (re-)write a fresh raw file. Inject
-//      `mode=<dirUrl>/<model>_optimize.csv` into the laplace argv.
+//      `mode=<dirUrl>/<name>_optimize.csv` into the laplace argv.
 //   3. Shell to cmdstan via `stanLaplace`.
 //   4. Post-process the raw CSV via `getLaplaceResult`.
 //
 //  The raw `_optimize.csv` survives the post-processing step
 //  (`getOptimizeResult` now writes its cleaned output to a sibling
-//  `<model>.optimize.csv` instead of overwriting in place), so the
+//  `<name>.optimize.csv` instead of overwriting in place), so the
 //  skip-if-valid check is safe and avoids a redundant optimize call
 //  on every laplace invocation.
 //
@@ -82,7 +82,7 @@ public func laplace(model: String = "bernoulli",
 }
 
 /// A cmdstan-produced `_optimize.csv` starts with `# stan_version_major = …`.
-/// Cleaned files don't. Used to decide whether `<model>_optimize.csv` is
+/// Cleaned files don't. Used to decide whether `<name>_optimize.csv` is
 /// reusable as a `mode=` source or needs to be re-generated.
 private func looksLikeRawOptimizeOutput(_ url: URL) -> Bool {
   guard let data = try? Data(contentsOf: url, options: .mappedIfSafe),

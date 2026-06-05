@@ -3,7 +3,7 @@
 //  StanTests
 //
 //  Direct tests for `stanOptimize(...)`. Same shape as the sample
-//  command tests — happy path produces the `<model>_optimize.csv`
+//  command tests — happy path produces the `<name>_optimize.csv`
 //  output, missing-variable data is now surfaced as an error.
 //
 

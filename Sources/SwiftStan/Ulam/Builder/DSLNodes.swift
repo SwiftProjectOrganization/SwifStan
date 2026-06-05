@@ -547,7 +547,7 @@ public struct GaussianProcessPrior: ModelStatement {
 /// Inits(["mu": 178, "sigma": 25])
 /// ```
 ///
-/// The pipeline writes `Results/<model>.init.json` and cmdstan
+/// The pipeline writes `Results/<name>.init.json` and cmdstan
 /// auto-picks it up via the `init=<path>` flag. v1 supports scalar
 /// Double inits only; vector / array inits are deferred.
 public struct Inits: ModelStatement {

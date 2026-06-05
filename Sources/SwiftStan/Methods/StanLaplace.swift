@@ -5,7 +5,7 @@
 //  Slice α of Docs/Planning docs/LaplaceCommandPlan.md. Thin wrapper
 //  that builds the cmdstan argv for the `laplace` inference method
 //  and shells out via `swiftSyncFileExec`. Output is the raw cmdstan
-//  CSV at `<model>_laplace.csv`; `GetLaplaceResult` post-processes it.
+//  CSV at `<name>_laplace.csv`; `GetLaplaceResult` post-processes it.
 //
 
 import Foundation

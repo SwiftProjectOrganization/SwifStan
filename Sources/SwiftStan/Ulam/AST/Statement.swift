@@ -24,7 +24,7 @@ public enum Statement: Hashable, Sendable {
   ///
   /// 2026-06-03: `constraints` (declaration-only `<lower=…, upper=…>`)
   /// and `start` (per-prior NUTS warmup init value, merged into the
-  /// `<model>.init.json` dict) are co-located shortcuts. `constraints`
+  /// `<name>.init.json` dict) are co-located shortcuts. `constraints`
   /// is mutually exclusive with `truncation` — the classify pass
   /// rejects co-set values via `constraintsConflictWithTruncation`.
   /// `start` collisions with `Inits([:])` resolve by walk-order
@@ -206,7 +206,7 @@ public enum Statement: Hashable, Sendable {
 
   /// User-supplied initial values for cmdstan's NUTS warmup
   /// (2026-06-02). Pure metadata — produces no Stan source. The pipeline
-  /// emits a sibling `<model>.init.json` file and prepends `init=<path>`
+  /// emits a sibling `<name>.init.json` file and prepends `init=<path>`
   /// to the cmdstan argv when sampling. Used for models whose posterior
   /// lives far from cmdstan's default U(-2, 2) random-init range —
   /// e.g. McElreath's m4.1 over Howell1 with `mu ~ Normal(178, 20)`.

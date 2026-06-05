@@ -3,7 +3,7 @@
 //  Stan
 //
 //  V2.1: case-root + per-model path resolution. Centralises the
-//  `<root>/<model>/{Preliminaries,Results}/` layout introduced in
+//  `<root>/<name>/{Preliminaries,Results}/` layout introduced in
 //  V2.1, replacing the V1 flat-directory convention.
 //
 
@@ -28,7 +28,7 @@ public func caseRoot() -> URL {
   return documents.appendingPathComponent("StanCases", isDirectory: true)
 }
 
-/// `(preliminaries, results)` URLs for `<model>` under the case root.
+/// `(preliminaries, results)` URLs for `<name>` under the case root.
 /// Does not create the directories — use `ensureCaseDirectories(_:)`
 /// for that.
 public func casePaths(for model: String) -> CasePaths {

@@ -9,7 +9,7 @@ import Foundation
 
 public func getSampleResult(dirUrl: URL,
                             modelName: String) -> (String, String) {
-  // 2026-06-02: glob `<model>_output*.csv` so non-default num_chains
+  // 2026-06-02: glob `<name>_output*.csv` so non-default num_chains
   // values (e.g. num_chains=2 or 8 passed via trailing args) and
   // partial-chain runs are merged correctly. The first chain's header
   // row is kept; subsequent chains contribute their data rows only.

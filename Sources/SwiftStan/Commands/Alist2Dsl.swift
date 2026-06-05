@@ -3,9 +3,9 @@
 //  Stan
 //
 //  V2.1 follow-up Slice F: orchestrate the alist parser pipeline.
-//  Reads `Preliminaries/<model>.alist.R`, runs the
+//  Reads `Preliminaries/<name>.alist.R`, runs the
 //  lex → parse → lower → classify → emit chain, and writes the result
-//  to `Preliminaries/<Model>.ulam.swift`. The capitalised stem matches
+//  to `Preliminaries/<Name>.ulam.swift`. The capitalised stem matches
 //  the dsl2stan smoke-driver naming convention.
 //
 //  Per `Docs/AlistParser.md`. The function is a stable Swift API for

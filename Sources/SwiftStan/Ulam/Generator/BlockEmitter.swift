@@ -432,7 +432,7 @@ enum BlockEmitter {
         break
       case .inits:
         // NUTS warmup inits (2026-06-02): pure metadata — the
-        // pipeline marshals it into `<model>.init.json` rather than
+        // pipeline marshals it into `<name>.init.json` rather than
         // emitting any Stan source.
         break
       case .likelihood(let lhs, let dist, let trunc, let useLpdf):

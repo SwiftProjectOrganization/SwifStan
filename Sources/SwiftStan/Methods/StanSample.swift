@@ -20,7 +20,7 @@ public func stanSample(dirUrl: URL,
     return ("","Input file \(binaryPath).data.json not found.")
   }
 
-  // 2026-06-02: wipe stale `<model>_output*.csv` from any previous run
+  // 2026-06-02: wipe stale `<name>_output*.csv` from any previous run
   // so a higher `num_chains` value doesn't bleed extra chains into the
   // post-sample glob in `getSampleResult` / `stanSummary`.
   for stale in chainOutputFiles(dirUrl: dirUrl, modelName: modelName) {
@@ -29,7 +29,7 @@ public func stanSample(dirUrl: URL,
 
   var args = ["sample"]
   args.append(contentsOf: arguments)
-  // 2026-06-02: auto-pick up a sibling `<model>.init.json` written by
+  // 2026-06-02: auto-pick up a sibling `<name>.init.json` written by
   // the V1 `ulam()` path or by `dsl2stan` from a smoke driver that
   // declares `Inits([...])`. Disk presence is the activation trigger
   // — no extra parameter needed.
@@ -39,6 +39,7 @@ public func stanSample(dirUrl: URL,
   }
   args.append(contentsOf: ["data", "file=\(binaryPath)" + ".data.json"])
   args.append(contentsOf: ["output", "file=\(binaryPath)" + "_output.csv"])
+  args.append(contentsOf: ["save_cmdstan_config=true"])
   
   if verbose {
     print(args)

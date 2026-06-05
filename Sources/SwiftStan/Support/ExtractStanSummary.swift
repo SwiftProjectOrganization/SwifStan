@@ -5,8 +5,8 @@
 //  Created by Robert Goedman on 11/14/25.
 //
 //  V2.1 follow-up (2026-05-29): updated to read the renamed raw
-//  source at `<model>_stansummary.csv` (formerly `<model>_summary.csv`)
-//  and write the cleaned output to `<model>.stansummary.csv` (dot).
+//  source at `<name>_stansummary.csv` (formerly `<name>_summary.csv`)
+//  and write the cleaned output to `<name>.stansummary.csv` (dot).
 //  Matches the optimize / laplace / pathfinder split.
 //
 
