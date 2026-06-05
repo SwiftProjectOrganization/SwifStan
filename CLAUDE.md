@@ -50,7 +50,7 @@ All shelling-out goes through `Support/SwiftSyncFileExec.swift` (`Foundation.Pro
 
 All commands read/write under `~/Documents/<STAN_CASES>/<name>/`:
 - `Preliminaries/` — input: `<name>.csv`, `<name>.alist.R`, `<Name>.ulam.swift`
-- `Results/` — output: `.stan`, `.data.json`, cmdstan binaries, chain CSVs, clean post-processed CSVs
+- `Results/` — output: `.stan`, `.data.json`, cmdstan binaries, chain CSVs, clean post-processed CSVs, plus `<name>.<method>.log` / `<name>.<method>.error.log` per cmdstan invocation (compile, sample, optimize, laplace, pathfinder, stansummary). Logs overwrite on each run — copy aside if a historical record is wanted.
 
 ### Output post-processing (raw vs clean)
 

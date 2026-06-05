@@ -47,5 +47,7 @@ public func stanSample(dirUrl: URL,
   
   return swiftSyncFileExec(program: binaryPath,
                            arguments: args,
-                           method: "sample")
+                           method: "sample",
+                           logsDir: dirUrl,
+                           logsBase: "\(modelName).sample")
 }

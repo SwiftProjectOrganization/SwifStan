@@ -20,6 +20,8 @@ public func stanCompile(dirUrl: URL,
 
   let result = swiftSyncFileExec(program: "/usr/bin/make",
                                  arguments: ["-C", cmdstan, "\(modelPath)"],
-                                 method: "(\(modelName) executable)")
+                                 method: "(\(modelName) executable)",
+                                 logsDir: dirUrl,
+                                 logsBase: "\(modelName).compile")
   return result
 }

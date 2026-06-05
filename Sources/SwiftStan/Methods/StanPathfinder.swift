@@ -23,5 +23,7 @@ public func stanPathfinder(dirUrl: URL,
 
   return swiftSyncFileExec(program: dirUrl.path + "/" + modelName,
                            arguments: args,
-                           method: "pathfinder")
+                           method: "pathfinder",
+                           logsDir: dirUrl,
+                           logsBase: "\(modelName).pathfinder")
 }

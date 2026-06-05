@@ -40,7 +40,9 @@ public func stanSummary(dirUrl: URL,
   let result = swiftSyncFileExec(program: cmdstan + "/bin/stansummary",
                                  arguments: chains.map(\.path)
                                    + ["--csv_filename", filePath],
-                                 method: "")
+                                 method: "stansummary",
+                                 logsDir: dirUrl,
+                                 logsBase: "\(modelName).stansummary")
   return result
 }
 

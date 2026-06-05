@@ -24,5 +24,7 @@ public func stanOptimize(dirUrl: URL,
   
   return swiftSyncFileExec(program: dirUrl.path + "/" + modelName,
                            arguments: args,
-                           method: "optimize")
+                           method: "optimize",
+                           logsDir: dirUrl,
+                           logsBase: "\(modelName).optimize")
 }

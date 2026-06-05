@@ -26,5 +26,7 @@ public func stanLaplace(dirUrl: URL,
 
   return swiftSyncFileExec(program: dirUrl.path + "/" + modelName,
                            arguments: args,
-                           method: "laplace")
+                           method: "laplace",
+                           logsDir: dirUrl,
+                           logsBase: "\(modelName).laplace")
 }

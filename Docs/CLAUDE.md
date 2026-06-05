@@ -47,6 +47,8 @@ Each subcommand has the same three layers; navigate them in this order when chan
 
 All shelling-out goes through `Support/SwiftSyncFileExec.swift`. It uses `Foundation.Process` synchronously with separate `stdout`/`stderr` pipes, reads both to EOF, and returns `(stdout-summary, stderr-or-empty)`. The convention across the codebase is that **empty second element = success**; callers branch on `result.1 == ""` and `exit(N)` with distinct codes per failure point (see `Sample.swift` for the canonical example: exits 5–9 each tag a different stage).
 
+Callers that pass the optional `logsDir:` + `logsBase:` parameters (every cmdstan-method wrapper does) get a best-effort per-invocation log written to `<dir>/<base>.log` (stdout) and `<dir>/<base>.error.log` (stderr). Both files are always written (zero-byte = "ran but emitted nothing"), overwrite on each call, and any write failure is swallowed — log capture never breaks the return tuple.
+
 ### Bootstrap install (`-I` / `--install`)
 
 `Helpers/CreateDotStanModelFile.swift` and `Helpers/CreateDotJsonDataFile.swift` write a bundled bernoulli example into the target `<name>/Results/` so a fresh checkout has something to compile and sample. `compile -I` installs `<name>.stan`; `sample -I` installs `<name>.data.json`. The `test` subcommand drives the full cycle end-to-end on `~/Documents/StanCases/bernoulli/`.
@@ -115,8 +117,6 @@ let model = UlamModel(data: ["y": .integer(...), "x": .real(...)]) {
 }
 ```
 
-Phases 1–6 are complete — v1 was feature-complete on 2026-05-24, then Phase 5.5 closed out the deferred-during-Phase-5 follow-ups (parser, int-column auto-promotion, loop-emission body translation, non-centred VaryingPrior, varying slopes, reedfrog two-grouping demo, test audit). The recursive-descent expression parser lives at `Sources/SwiftStan/Ulam/Generator/{ExpressionLexer,ExpressionParser}.swift` with `ExpressionNode` AST under `AST/` and backs the vectorisation strategy + auto-promotion + loop renderer in `BlockEmitter`. Tests live in `Tests/SwiftStanTests/UlamGeneratorTests.swift` + `UlamExpressionParserTests.swift` (53 tests, `swift-testing`): 23 pure-generator goldens + 21 parser tests + 6 end-to-end artifact emitters in `UlamArtifactEmissionTests` that drive `ulam()` for each demo (bernoulli, poisson, binomial, ucb, dmvnorm, reedfrog) and land the full pipeline output (`.stan`, `.data.json`, compiled binary, chain CSVs, `<Name>.ulam.swift` smoke driver) under `~/Documents/StanCases/<name>/`. Forward-looking v2 work (SUR, LKJ-Cholesky, GPs, post-sampling helpers) lives in [`TODO.md`](TODO.md).
-
 ### `(String, String)` return convention
 
 Almost every helper returns `(String, String)` where `.0` is a human-readable status line and `.1` is an error message (empty on success). This shows up everywhere — `compile`, `sample`, `swiftSyncFileExec`, `csvToDict`, etc. — and the call sites consistently branch on `.1 == ""`. Don't replace it with `throws` piecemeal; either keep it or refactor everything in one pass.
@@ -134,14 +134,13 @@ Indentation in the existing sources is **2 spaces**, not the 4 spaces specified 
 
 ## Related / sibling projects
 
-- [SwiftStats](https://github.com/SwiftProjectOrganization/SwiftStats) — consumes the clean `*.samples.csv` / `*.stansummary.csv` files this CLI produces. Output filesystem layout under `~/Documents/<dir>/<name>/` is the contract between the two.
 - [cmdstan](https://mc-stan.org/docs/2_37/cmdstan-guide/) — the underlying binary that this wrapper calls via `make`.
 - McElreath's R package `rethinking` provides `ulam()` (R alist → Stan code generator). Phases 1–6 + Phase 5.5 of a Swift port live in `Sources/SwiftStan/Ulam/` and are exposed via the `stan ulam` subcommand; see **Ulam module** above for the consolidated per-phase notes.
 
 ## Key constraints
 
 - macOS only (`Process`, `/usr/bin/make`, `~/Documents`-rooted paths, `FileManager.urls(for: .documentDirectory, in: .userDomainMask)`).
-- Swift 6.2 toolchain (`Package.swift` declares `swift-tools-version: 6.2`).
+- Swift 6.2+ toolchain (`Package.swift` declares `swift-tools-version: 6.2`).
 - Single dependency: `swift-argument-parser` ≥ 1.2.0. Do not pull in additional packages without a clear reason — the CLI's value proposition is "thin wrapper".
 - Prefer `async`/`await` over Combine for any new asynchronous code. The current shell-out path is intentionally synchronous (`Process.run()` + read-to-EOF) because the CLI is short-lived; if you make it async, propagate that everywhere rather than mixing styles.
 
