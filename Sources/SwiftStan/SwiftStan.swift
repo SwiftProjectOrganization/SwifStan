@@ -22,7 +22,7 @@ struct SwiftStan: ParsableCommand {
     // Pass an array to `subcommands` to set up a nested tree of subcommands.
     // With language support for type-level introspection, this could be
     // provided by automatically finding nested `ParsableCommand` types.
-    subcommands: [Compile.self, Sample.self, Optimize.self, Pathfinder.self, Laplace.self, Stansummary.self, Csv2Json.self, Dsl2Stan.self, Alist2Dsl.self, Stancode.self, Ulam.self, Test.self],
+    subcommands: [Compile.self, Sample.self, Optimize.self, Pathfinder.self, Laplace.self, Stansummary.self, Csv2Json.self, Dsl2Stan.self, Alist2Dsl.self, Stancode.self, Runinfo.self, Ulam.self, Test.self],
     
     // A default subcommand, when provided, is automatically selected if a
     // subcommand is not given on the command line.
@@ -354,6 +354,26 @@ extension SwiftStan {
       let model = options.model ?? "bernoulli"
       do {
         let url = try stancode(model: model, verbose: options.verbose)
+        printFinalResult(("Wrote \(url.path)", ""))
+      } catch {
+        printFinalResult(("", "\(error)"))
+      }
+    }
+  }
+}
+
+extension SwiftStan {
+  struct Runinfo: ParsableCommand {
+    static let configuration = CommandConfiguration(
+      commandName: "runinfo",
+      abstract: "Read Results/<name>_output_config.json and write a cleaned Results/<name>.runinfo.json.")
+
+    @OptionGroup var options: OptionsLimited
+
+    mutating func run() {
+      let model = options.model ?? "bernoulli"
+      do {
+        let url = try runinfo(model: model, verbose: options.verbose)
         printFinalResult(("Wrote \(url.path)", ""))
       } catch {
         printFinalResult(("", "\(error)"))
