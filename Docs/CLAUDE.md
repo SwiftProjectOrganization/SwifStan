@@ -10,20 +10,20 @@ SwiftStan is a Swift Package Manager command-line tool that wraps Stan's [cmdsta
 
 The functionality can be used in Xcode: edit the scheme's "Arguments passed on launch", press build-and-run, and watch the console. 
 
-By creating an alias to `~/Library/Developer/Xcode/DerivedData/Stan_*/Build/Products/Debug/stan`, it can be used from a shell. This is the intended way.
+By creating an alias `swiftstan` to `~/Library/Developer/Xcode/DerivedData/SwiftStan_*/Build/Products/Debug/SwiftStan`, it can be used from a shell. This is the intended way.
 
 ## Build & Run Commands
 
 From within Xcode:
 
-1. Product → Scheme → Edit Scheme → set "Arguments passed on launch" (e.g. `compile -V -I`, `sample -V -I`, `test`).
+1. Product → Scheme → Edit Scheme → set "Arguments passed on launch" (e.g. `compile -V -I --model bernoulli`, `sample --model bernoulli`, `test`). 
 2. Build and Run.
 
 From a shell (the primary workflow):
 
 ```bash
-swiftstan compile -V -I --model bernoulli
-swiftstan sample  -V    --model bernoulli num_chains=4 num_samples=1000
+swiftstan compile --model bernoulli
+swiftstan sample -V --model bernoulli num_samples=2000
 swiftstan test  # runs the full cycle on Bernoulli
 ```
 
@@ -39,7 +39,7 @@ See the [README](https://github.com/SwiftProjectOrganization/Stan/blob/main/Docs
 
 Each subcommand has the same three layers; navigate them in this order when changing behaviour:
 
-1. **`Sources/SwiftStan/Stan.swift`** — the `@main struct Stan: ParsableCommand` plus nested `extension Stan { struct <Sub>: ParsableCommand }` types. Three shared `ParsableArguments` groups (`OptionsCompile`, `OptionsSample`, `OptionsLimited`) carry the flags/options. Each subcommand's `run()` reads `CMDSTAN`, resolves the path, and forwards to a top-level Swift function.
+1. **`Sources/SwiftStan/SwiftStan.swift`** — the `@main struct SwiftStan: ParsableCommand` plus nested `extension SwiftStan { struct <Sub>: ParsableCommand }` types. Three shared `ParsableArguments` groups (`OptionsCompile`, `OptionsSample`, `OptionsLimited`) carry the flags/options. Each subcommand's `run()` reads `CMDSTAN`, resolves the path, and forwards to a top-level Swift function.
 2. **`Sources/SwiftStan/Commands/*.swift`** — `compile`, `sample`, `optimize`, `pathfinder`, `laplace`, `stansummary`, `csv2json`, `dsl2stan`, `alist2dsl`, `stancode`. These are the orchestration layer: resolve `casePaths(for: model)`, optionally install bootstrap files (`-I`), call the `Methods/` layer (or shell out via `Process`), then post-process via `Support/`.
 3. **`Sources/SwiftStan/Methods/*.swift`** — `stanCompile`, `stanSample`, `stanOptimize`, `stanPathfinder`, `stanSummary`. Thin wrappers that build an argv and shell out via `swiftSyncFileExec`. The `stanSummary` function lives in `Methods/RunStanSummary.swift` (not `StanSummary.swift`) to avoid an APFS case-insensitive `.o` collision with `Commands/Stansummary.swift`.
 
@@ -82,12 +82,13 @@ Defined in `SwiftStan.swift`:
 
 - `compile` — uses `OptionsCompile` (`-V`, `-I`, `--cmdstan`, `--model`, trailing `values`).
 - `sample` — uses `OptionsSample` (adds `-S/--nosummary`). Defaults `num_chains=4 num_samples=1000` when no trailing args are passed. Always calls `getSampleResult` to produce the clean samples file, and by default also runs `stanSummary` + `extractStanSummary`.
-- `optimize`, `pathfinder`, `laplace`, `stansummary`, `csv2json`, `dsl2stan`, `alist2dsl`, `stancode` — all use `OptionsLimited` (no `-I` or `-S`).
+- `optimize`, `pathfinder`, `laplace`, `stansummary`, `csv2json`, `dsl2stan`, `alist2dsl`, `stancode`, `runinfo` — all use `OptionsLimited` (no `-I` or `-S`).
 - `laplace` — runs cmdstan's Laplace approximation. cmdstan requires an explicit `mode=<file>`; the orchestrator runs `stanOptimize` when `<name>_optimize.csv` is missing or doesn't carry the cmdstan `#` header (verified via a one-byte peek in `looksLikeRawOptimizeOutput`), then feeds the raw file via `mode=`. Trailing pass-through args (`stan laplace --model bernoulli draws=2000 mode=my_mode.csv`) work as for any other cmdstan subcommand. The split filename convention — raw `<name>_optimize.csv` vs clean `<name>.optimize.csv` (see Output post-processing above) — is what keeps the raw file stable across repeated invocations.
 - `alist2dsl` — reads `Preliminaries/<name>.alist.R`, runs lexer → parser → lowering → classify → emitter (see **Alist module** below), writes a runnable `@main` `<Name>.ulam.swift` to the same `Preliminaries/` directory. McElreath's "first `~` statement is the likelihood" convention drives the role assignment; `dbinom(1, p)` collapses to `.bernoulli(p:)`; `σ` parameters that appear as the scale slot of a normal/cauchy/lognormal/gamma get `truncation: Truncation(lower: 0)` automatically (half-Cauchy / half-normal).
 - `stancode` — in-process fast path. Same alist parser chain as `alist2dsl`, but the classified AST flows through `AlistToUlamModel.build(_:)` to a runtime `UlamModel` value, then through the existing public `stancode(_: UlamModel) throws -> String` generator, written directly to `Results/<name>.stan`. No swiftc, no subprocess. Two stancode entry points exist on the Swift API: `stancode(_ model: UlamModel) throws -> String` (pure) and `stancode(model: String, verbose: Bool) throws -> URL` (the file-based command). The label `model:` disambiguates.
 - `csv2json` — reads `Preliminaries/<name>.csv` + `Results/<name>.stan`, writes `Results/<name>.data.json`. Validates that every row-data variable declared in the `.stan` schema is present in the CSV; derives `N` and `N_<col>` cardinalities from the data; fails loudly on `NA` (`Csv2JsonError.naValue` with column + row).
 - `dsl2stan` — reads `Preliminaries/*.ulam.swift`, shells to `swiftc` to compile + run it, captures stdout into `Results/<name>.stan`. Locates the project source tree via `$STAN_PROJECT_ROOT` (defaults to a developer fallback path).
+- `runinfo` — pure-Swift, no shell-out. Reads `Results/<name>_output_config.json` (cmdstan emits this when `save_cmdstan_config=true` — `StanSample.swift` already sets it) into a typed `RunInfo` value, then writes a cleaned `Results/<name>.runinfo.json` alongside (`data.file`/`output.file` reduced to basenames, sorted keys, 2-space indent). Two Swift API entry points: `readRunInfo(dirUrl:modelName:) throws -> RunInfo` (parse only) and `writeCleanRunInfo(dirUrl:modelName:) throws -> URL` (parse + clean + write). `MethodConfig` is a tagged-union enum (`.sample(SampleConfig)`, `.optimize(OptimizeConfig)`, `.laplace(LaplaceConfig)`, `.pathfinder(PathfinderConfig)`) discriminated on the `method.value` string; the `sample` case is fully typed against a real cmdstan emission, the other three currently decode the nested object into a `[String: JSONValue]` placeholder until those wrappers also set `save_cmdstan_config=true`. The hand-rolled `RunInfoMarshaller` (mirrors `Ulam/Data/DataMarshaller.swift`) preserves clean Doubles (`0.05`, not `0.050000000000000003` as `JSONSerialization.data(.prettyPrinted)` would emit). The Support file is `RunInfoIO.swift` (not `RunInfo.swift`) to avoid an APFS case-insensitive `.o` collision with `Commands/Runinfo.swift` — same pattern as `Methods/RunStanSummary.swift` vs `Commands/Stansummary.swift`.
 - `ulam` — V2.1: file-based pipeline driven by `ulamPipeline(model:cmdstan:verbose:arguments:)`. Picks the .stan-generation path by input presence: if `Preliminaries/<name>.alist.R` exists, use `stancode` (in-process, fast); otherwise, fall back to `dsl2stan` against `Preliminaries/<Name>.ulam.swift`. Then `csv2json → compile → sample`. Each step skipped when its outputs are newer than its inputs. The CLI lowercases `--model` for case-directory lookup.
 - `test` (default subcommand) — drives `compile → sample → optimize → pathfinder` on `~/Documents/StanCases/bernoulli/`.
 
@@ -135,7 +136,7 @@ Indentation in the existing sources is **2 spaces**, not the 4 spaces specified 
 ## Related / sibling projects
 
 - [cmdstan](https://mc-stan.org/docs/2_37/cmdstan-guide/) — the underlying binary that this wrapper calls via `make`.
-- McElreath's R package `rethinking` provides `ulam()` (R alist → Stan code generator). Phases 1–6 + Phase 5.5 of a Swift port live in `Sources/SwiftStan/Ulam/` and are exposed via the `stan ulam` subcommand; see **Ulam module** above for the consolidated per-phase notes.
+- McElreath's R package `rethinking` provides `ulam()`.
 
 ## Key constraints
 
