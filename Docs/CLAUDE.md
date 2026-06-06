@@ -1,6 +1,6 @@
-# CLAUDE.md
+# SwiftStan CLAUDE.md
 
-## Purpose
+## Purpose of this file
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -8,9 +8,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 SwiftStan is a Swift Package Manager command-line tool that wraps Stan's [cmdstan](https://mc-stan.org/docs/2_37/cmdstan-guide/) toolchain on macOS. 
 
-The functionality can be used in Xcode: edit the scheme's "Arguments passed on launch", press build-and-run, and watch the console. 
+The functionality provided by SwiftStan can be used:
 
-By creating an alias `swiftstan` to `~/Library/Developer/Xcode/DerivedData/SwiftStan_*/Build/Products/Debug/SwiftStan`, it can be used from a shell. This is the intended way.
+1. In Xcode: edit the scheme's "Arguments passed on launch", press build-and-run, and watch the console. 
+
+2. By creating an alias `swiftstan` to `~/Library/Developer/Xcode/DerivedData/SwiftStan_*/Build/Products/Debug/SwiftStan`, it can be used from a shell. This is the intended way.
 
 ## Build & Run Commands
 

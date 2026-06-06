@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The Ulam method and an intermittent DSL is part of a Swift port of McElreath's `ulam()` implementation (from the `rethinking` R package). It lets you describe a Bayesian model with a (small?) Swift result-builder DSL, then generate Stan Language model, a Stan-compatible data JSON input data file, and (optionally) use the cmdstan pipeline to compile and sample end-to-end.
+The Ulam method and an intermittent DSL is part of a Swift port of McElreath's `ulam()` implementation (from the `rethinking` R package). It lets you describe a Bayesian model with a (small?) Swift result-builder DSL, then generate a Stan Language Program, a Stan-compatible data JSON input data file, and (optionally) use the cmdstan pipeline to compile and sample end-to-end.
 
 This document is the per-construct reference. Each section has the same shape:
 
