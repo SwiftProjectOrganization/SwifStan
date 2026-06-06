@@ -1,4 +1,4 @@
-# SWiftStan
+# SwiftStan
 
 1. A macOS / Xcode / Swift CLI wrapping Stan's [cmdstan](https://mc-stan.org/docs/2_37/cmdstan-guide/).
 
