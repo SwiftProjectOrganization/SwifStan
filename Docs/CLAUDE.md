@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-SwiftStan is a Swift Package Manager command-line tool that wraps Stan's [cmdstan](https://mc-stan.org/docs/2_37/cmdstan-guide/) toolchain on macOS. 
+SwiftStan is a Swift Package that provides a command-line tool that wraps Stan's [cmdstan](https://mc-stan.org/docs/2_37/cmdstan-guide/) toolchain on macOS. 
 
 The functionality provided by SwiftStan can be used:
 
@@ -98,7 +98,7 @@ Defined in `SwiftStan.swift`:
 
 ### Ulam module
 
-A Swift port of McElreath's R `ulam()` (from the `rethinking` package). Sits **above** the existing pipeline: emits a `<name>.stan` + `<name>.data.json` from a Swift result-builder DSL and hands off to the existing `compile` + `sample` machinery. Phases 1–6 + 5.5 ✅, V2.1 ✅, alist2dsl ✅, stancode ✅.
+A Swift port of McElreath's R `ulam()` (from the `rethinking` package). Sits **above** the existing pipeline: emits a `<name>.stan` + `<name>.data.json` from a Swift result-builder DSL and hands off to the existing `compile` + `sample` machinery. alist2dsl ✅, stancode ✅.
 
 Layout under `Sources/SwiftStan/Ulam/`:
 
@@ -119,6 +119,21 @@ let model = UlamModel(data: ["y": .integer(...), "x": .real(...)]) {
   Prior("b", .normal(0, 0.5))
 }
 ```
+
+### Tests & fixture staging
+
+Tests live in `Tests/SwiftStanTests/`; they use Swift Testing (`@Suite` + `@Test` + `#require`/`#expect`), not XCTest. Run a single one with `swift test --filter "<name>"`.
+
+A whole-suite invocation (`swift test`) must succeed against an **empty** `~/Documents/<STAN_CASES>/` directory. Pipeline tests that need a hand-authored fixture (e.g. `howell.csv`, `chimpanzees.csv`, `Chimpanzees.ulam.swift`) **must** stage that fixture themselves before any `#require(fileExists:)`. Don't rely on test ordering — Swift Testing parallelises, and the first run from a fresh checkout is the canonical "does this work?" case.
+
+Pattern:
+
+1. Bundle the fixture under `Tests/SwiftStanTests/TestDataFiles/` and declare it in `Package.swift` (`resources: [.copy("TestDataFiles")]` is already set).
+2. Call `stageBundledFixture(named:to:)` from `Tests/SwiftStanTests/TestFixtureStaging.swift` — it copies via `Bundle.module` and overwrites stale destinations.
+3. If the test also needs derived artifacts (a compiled binary, a generated `.stan`), bootstrap them after staging: call `stancode(model:)` / `stanCompile(...)` / `createDotStanModelFile(model:)` / `createDotJsonDataFile(model:)` directly. `LaplaceTests.bernoulliLaplaceProducesOutputCsv` is the canonical example.
+4. Keep the `#require(fileExists:)` checks downstream of staging — they then act as belt-and-braces for the staging itself.
+
+Why not just rely on `~/Documents/StanCases/`? Because clean checkouts (and CI) won't have it, and we don't want test pass/fail to depend on which other test ran first.
 
 ### `(String, String)` return convention
 

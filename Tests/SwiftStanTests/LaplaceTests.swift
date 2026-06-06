@@ -29,12 +29,35 @@ struct LaplaceTests {
   @Test func bernoulliLaplaceProducesOutputCsv() throws {
     let paths = casePaths(for: "bernoulli")
     let binary = paths.results.appendingPathComponent("bernoulli")
+    let stanURL = paths.results.appendingPathComponent("bernoulli.stan")
     let dataJSON = paths.results.appendingPathComponent("bernoulli.data.json")
     let fm = FileManager.default
+
+    // Bootstrap the canonical bernoulli case dir when running from a
+    // clean state. The other tests that exercise bernoulli (sample /
+    // optimize / pathfinder direct tests) use synthetic per-test
+    // models, so we can't rely on any of them having pre-staged the
+    // binary. `createDotStanModelFile` + `createDotJsonDataFile` are
+    // the same install helpers `compile -I` / `sample -I` use.
+    try ensureCaseDirectories(paths)
+    if !fm.fileExists(atPath: stanURL.path) {
+      _ = createDotStanModelFile(model: "bernoulli")
+    }
+    if !fm.fileExists(atPath: dataJSON.path) {
+      _ = createDotJsonDataFile(model: "bernoulli")
+    }
+    if !fm.fileExists(atPath: binary.path) {
+      let compileResult = stanCompile(dirUrl: paths.results,
+                                      modelName: "bernoulli",
+                                      cmdstan: Self.cmdstan,
+                                      verbose: false)
+      try #require(compileResult.1.isEmpty,
+                   "bernoulli bootstrap-compile failed: \(compileResult.1)")
+    }
     try #require(fm.fileExists(atPath: binary.path),
-                 "bernoulli binary missing; run `stan compile -I --model bernoulli` first")
+                 "bernoulli binary still missing after bootstrap")
     try #require(fm.fileExists(atPath: dataJSON.path),
-                 "bernoulli.data.json missing; run `stan sample -I --model bernoulli` first")
+                 "bernoulli.data.json still missing after bootstrap")
 
     let result = laplace(model: "bernoulli",
                          arguments: [],

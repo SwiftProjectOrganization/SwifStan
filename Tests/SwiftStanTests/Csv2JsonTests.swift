@@ -25,9 +25,27 @@ struct Csv2JsonTests {
   @Test func chimpanzeesHappyPath() throws {
     let paths = casePaths(for: "chimpanzees")
     let csvURL = paths.preliminaries.appendingPathComponent("chimpanzees.csv")
+    let alistURL = paths.preliminaries.appendingPathComponent("chimpanzees.alist.R")
     let stanURL = paths.results.appendingPathComponent("chimpanzees.stan")
-    try #require(FileManager.default.fileExists(atPath: csvURL.path))
-    try #require(FileManager.default.fileExists(atPath: stanURL.path))
+    let fm = FileManager.default
+
+    // Bootstrap from bundled fixtures so the test works on a clean
+    // checkout. csv2json itself doesn't generate the .stan it validates
+    // against — we run `stancode` against the alist fixture to produce
+    // it. Skipped when the user already has a hand-authored `.stan`.
+    try ensureCaseDirectories(paths)
+    if !fm.fileExists(atPath: csvURL.path) {
+      try stageBundledFixture(named: "chimpanzees.csv", to: csvURL)
+    }
+    if !fm.fileExists(atPath: alistURL.path) {
+      try stageBundledFixture(named: "chimpanzees.alist.R", to: alistURL)
+    }
+    if !fm.fileExists(atPath: stanURL.path) {
+      _ = try stancode(model: "chimpanzees")
+    }
+
+    try #require(fm.fileExists(atPath: csvURL.path))
+    try #require(fm.fileExists(atPath: stanURL.path))
 
     let outURL = try csv2json(model: "chimpanzees")
     let payload = try Data(contentsOf: outURL)

@@ -30,10 +30,29 @@ struct V2WorkflowTests {
   @Test func chimpanzeesPipelineEndToEnd() throws {
     let paths = casePaths(for: "chimpanzees")
     let fm = FileManager.default
-    try #require(fm.fileExists(atPath: paths.preliminaries
-      .appendingPathComponent("Chimpanzees.ulam.swift").path))
-    try #require(fm.fileExists(atPath: paths.preliminaries
-      .appendingPathComponent("chimpanzees.csv").path))
+    let csvURL = paths.preliminaries.appendingPathComponent("chimpanzees.csv")
+    let driverURL = paths.preliminaries.appendingPathComponent("Chimpanzees.ulam.swift")
+    let alistURL = paths.preliminaries.appendingPathComponent("chimpanzees.alist.R")
+
+    // Stage bundled fixtures so a fresh checkout with an empty
+    // `~/Documents/<STAN_CASES>/` doesn't fail the pre-checks. Stages
+    // all three (csv, driver, alist) to match the user's typical local
+    // layout — `ulamPipeline` then prefers the alist (stancode fast
+    // path) over the smoke driver.
+    try fm.createDirectory(at: paths.preliminaries,
+                           withIntermediateDirectories: true)
+    if !fm.fileExists(atPath: csvURL.path) {
+      try stageBundledFixture(named: "chimpanzees.csv", to: csvURL)
+    }
+    if !fm.fileExists(atPath: driverURL.path) {
+      try stageBundledFixture(named: "Chimpanzees.ulam.swift", to: driverURL)
+    }
+    if !fm.fileExists(atPath: alistURL.path) {
+      try stageBundledFixture(named: "chimpanzees.alist.R", to: alistURL)
+    }
+
+    try #require(fm.fileExists(atPath: driverURL.path))
+    try #require(fm.fileExists(atPath: csvURL.path))
 
     let result = ulamPipeline(model: "chimpanzees",
                               cmdstan: Self.cmdstan)
@@ -73,12 +92,27 @@ struct V2WorkflowTests {
     let paths = casePaths(for: "howell")
     let fm = FileManager.default
     let csvURL = paths.preliminaries.appendingPathComponent("howell.csv")
+    let alistURL = paths.preliminaries.appendingPathComponent("howell.alist.R")
+    let driverURL = paths.preliminaries.appendingPathComponent("Howell.ulam.swift")
+
+    // Stage bundled fixtures into the case dir so a fresh checkout with
+    // an empty `~/Documents/<STAN_CASES>/` doesn't fail the pre-checks.
+    // Skipped if either file already exists (e.g. the user has a
+    // hand-authored `Howell.ulam.swift` in place).
+    try fm.createDirectory(at: paths.preliminaries,
+                           withIntermediateDirectories: true)
+    if !fm.fileExists(atPath: csvURL.path) {
+      try stageBundledFixture(named: "howell.csv", to: csvURL)
+    }
+    if !fm.fileExists(atPath: alistURL.path)
+        && !fm.fileExists(atPath: driverURL.path) {
+      try stageBundledFixture(named: "howell.alist.R", to: alistURL)
+    }
+
     try #require(fm.fileExists(atPath: csvURL.path),
                  "howell.csv fixture missing at \(csvURL.path)")
     // Either an alist.R or a *.ulam.swift driver is sufficient for the
     // pipeline to pick a path.
-    let alistURL = paths.preliminaries.appendingPathComponent("howell.alist.R")
-    let driverURL = paths.preliminaries.appendingPathComponent("Howell.ulam.swift")
     try #require(fm.fileExists(atPath: alistURL.path)
                  || fm.fileExists(atPath: driverURL.path),
                  "howell driver missing — need howell.alist.R or Howell.ulam.swift")
