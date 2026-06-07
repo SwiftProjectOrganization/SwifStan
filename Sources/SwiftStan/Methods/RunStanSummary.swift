@@ -33,7 +33,8 @@ public func stanSummary(dirUrl: URL,
   // than hard-coding `_output_1..4.csv`. Handles arbitrary `num_chains`
   // values supplied via trailing args, plus partial runs where some
   // chains diverged — summarise whatever is on disk.
-  let chains = chainOutputFiles(dirUrl: dirUrl, modelName: modelName)
+  let chains = chainsFromRunInfo(dirUrl: dirUrl, modelName: modelName)
+            ?? chainOutputFiles(dirUrl: dirUrl, modelName: modelName)
   if chains.isEmpty {
     return ("", "stansummary: no `\(modelName)_output*.csv` files found in \(dirUrl.path)")
   }
@@ -44,6 +45,40 @@ public func stanSummary(dirUrl: URL,
                                  logsDir: dirUrl,
                                  logsBase: "\(modelName).stansummary")
   return result
+}
+
+/// Authoritative chain-file list derived from
+/// `<name>_output_config.json` (cmdstan's emitted config, parsed via
+/// `readRunInfo`). Honours the `id` offset so batched-run workflows
+/// (chains 5..7 in a second invocation) get the right URLs back, not
+/// chains 1..3. Returns the URLs that *exist on disk*, in id order; a
+/// partial run (4 expected, 3 present) returns the 3 and prints a
+/// one-line warning so the user can spot the discrepancy.
+///
+/// Returns `nil` when the config is missing / unreadable / non-sample
+/// / yields zero present URLs — caller should fall back to
+/// `chainOutputFiles(...)`, which globs whatever happens to be on
+/// disk (the pre-runinfo behaviour). Together: runinfo-first,
+/// glob-backup.
+public func chainsFromRunInfo(dirUrl: URL, modelName: String) -> [URL]? {
+  guard let info = try? readRunInfo(dirUrl: dirUrl, modelName: modelName),
+        case .sample(let s) = info.method else { return nil }
+  let fm = FileManager.default
+  let urls: [URL]
+  if s.numChains == 1 {
+    urls = [dirUrl.appendingPathComponent("\(modelName)_output.csv")]
+  } else {
+    urls = (0..<s.numChains).map { offset in
+      dirUrl.appendingPathComponent(
+        "\(modelName)_output_\(info.id + offset).csv")
+    }
+  }
+  let present = urls.filter { fm.fileExists(atPath: $0.path) }
+  if present.isEmpty { return nil }
+  if present.count < s.numChains {
+    print("warning: \(modelName): runinfo declared num_chains=\(s.numChains) (starting at id \(info.id)), but only \(present.count) chain output file(s) found on disk — summarising the available subset.")
+  }
+  return present
 }
 
 /// Enumerate cmdstan's per-chain output files for a model, in chain-id

@@ -9,11 +9,14 @@ import Foundation
 
 public func getSampleResult(dirUrl: URL,
                             modelName: String) -> (String, String) {
-  // 2026-06-02: glob `<name>_output*.csv` so non-default num_chains
-  // values (e.g. num_chains=2 or 8 passed via trailing args) and
-  // partial-chain runs are merged correctly. The first chain's header
-  // row is kept; subsequent chains contribute their data rows only.
-  let chains = chainOutputFiles(dirUrl: dirUrl, modelName: modelName)
+  // 2026-06-06: prefer runinfo's `num_chains` + `id` offset as the
+  // authoritative chain list. Falls back to globbing `<name>_output*.csv`
+  // when the config JSON is missing (older runs that didn't set
+  // `save_cmdstan_config=true`, or non-sample methods). The first
+  // chain's header row is kept; subsequent chains contribute their
+  // data rows only.
+  let chains = chainsFromRunInfo(dirUrl: dirUrl, modelName: modelName)
+            ?? chainOutputFiles(dirUrl: dirUrl, modelName: modelName)
   if chains.isEmpty {
     let modelPath = "\(dirUrl.path)/\(modelName)"
     return ("", "Error: no \(modelPath)_output*.csv chains found.")
