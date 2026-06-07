@@ -159,4 +159,81 @@ struct DataInferenceCollisionTests {
     }
     #expect(throws: Never.self) { _ = try stancode(model) }
   }
+
+  // MARK: - Index column value validation (TODO §2)
+
+  private func expectIndexValueOutOfRange<T>(_ block: () throws -> T) {
+    do {
+      _ = try block()
+      Issue.record("expected DataInferenceError.indexColumnValueOutOfRange but no error was thrown")
+    } catch let err as DataInferenceError {
+      if case .indexColumnValueOutOfRange = err { return }
+      Issue.record("expected indexColumnValueOutOfRange but got \(err)")
+    } catch {
+      Issue.record("expected DataInferenceError but got \(type(of: error)): \(error)")
+    }
+  }
+
+  @Test func indexColumnWithZeroValueIsRejected() throws {
+    let data: UlamData = [
+      "y":     .integer([0, 1, 0]),
+      "group": .integer([1, 0, 2]),   // row 1 is a 0 — Stan's <lower=1> fires
+    ]
+    let model = UlamModel(data: data) {
+      Likelihood("y", .bernoulli(p: "p"))
+      Link(.logit, lhs: "p", rhs: "a[group]")
+      VaryingPrior("a", indexedBy: "group", .normal(0, 1))
+    }
+    expectIndexValueOutOfRange { try stancode(model) }
+  }
+
+  @Test func indexColumnWithNegativeValueIsRejected() throws {
+    let data: UlamData = [
+      "y":     .integer([0, 1, 0]),
+      "group": .integer([-1, 1, 2]),  // row 0 is -1
+    ]
+    let model = UlamModel(data: data) {
+      Likelihood("y", .bernoulli(p: "p"))
+      Link(.logit, lhs: "p", rhs: "a[group]")
+      VaryingPrior("a", indexedBy: "group", .normal(0, 1))
+    }
+    expectIndexValueOutOfRange { try stancode(model) }
+  }
+
+  /// User declares cardinality `"J": .scalarInt(7)` via data; a row
+  /// value of `8` exceeds Stan's resulting `<lower=1, upper=J>`
+  /// constraint. The auto-derived `N_<col>` case can't trigger this —
+  /// the upper bound IS `max(values)` by construction — so the check
+  /// kicks in only when the user supplies a fixed cardinality.
+  @Test func indexColumnValueExceedingUserSuppliedCardinalityIsRejected() throws {
+    let data: UlamData = [
+      "y":     .integer([0, 1, 0, 1]),
+      "group": .integer([1, 2, 8, 3]),    // row 2 = 8 > J = 7
+      "J":     .scalarInt(7),
+    ]
+    let model = UlamModel(data: data) {
+      Likelihood("y", .bernoulli(p: "p"))
+      Link(.logit, lhs: "p", rhs: "a[group]")
+      VaryingPrior("a", indexedBy: "group", .normal(0, 1), countSymbol: "J")
+    }
+    expectIndexValueOutOfRange { try stancode(model) }
+  }
+
+  /// Positive regression guard: a well-formed index column shouldn't
+  /// throw. The existing multilevel goldens (`multilevelBernoulliMatchesGolden`,
+  /// `ucbBinomialWithCountSymbolOverride`, cafe, reedfrog, etc.) cover
+  /// this implicitly via their golden assertions; this is an explicit
+  /// smoke test so a future bug in the validator surfaces here directly.
+  @Test func wellFormedIndexColumnDoesNotThrow() throws {
+    let data: UlamData = [
+      "y":     .integer([0, 1, 0, 1, 1]),
+      "group": .integer([1, 2, 1, 2, 3]),
+    ]
+    let model = UlamModel(data: data) {
+      Likelihood("y", .bernoulli(p: "p"))
+      Link(.logit, lhs: "p", rhs: "a[group]")
+      VaryingPrior("a", indexedBy: "group", .normal(0, 1))
+    }
+    #expect(throws: Never.self) { _ = try stancode(model) }
+  }
 }

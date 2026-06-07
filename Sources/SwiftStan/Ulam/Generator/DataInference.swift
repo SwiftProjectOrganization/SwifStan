@@ -172,6 +172,7 @@ enum DataInferenceError: Error, CustomStringConvertible {
   case constraintsConflictWithTruncation(name: String)
   case nestedVaryingPriorArity(name: String, got: Int)
   case countSymbolCollision(symbol: String, reason: String)
+  case indexColumnValueOutOfRange(column: String, atIndex: Int, value: Int, reason: String)
 
   var description: String {
     switch self {
@@ -208,6 +209,8 @@ enum DataInferenceError: Error, CustomStringConvertible {
       return "ulam: NestedVaryingPrior '\(name)' has indexedBy.count == \(got); v1 supports exactly two grouping dimensions"
     case .countSymbolCollision(let symbol, let reason):
       return "ulam: cardinality symbol '\(symbol)' collides with \(reason)"
+    case .indexColumnValueOutOfRange(let column, let atIndex, let value, let reason):
+      return "ulam: index column '\(column)' has value \(value) at row \(atIndex) — \(reason)"
     }
   }
 }
@@ -764,6 +767,35 @@ enum DataInference {
       guard let col = model.data[sym] else { continue }
       if case .integer = col, indexColumns[sym] == nil {
         promotedIntColumns.insert(sym)
+      }
+    }
+
+    // 2026-06-06: index column value validation (TODO §2).
+    //
+    // Every index column declares `array[N] int<lower=1, upper=<sym>>
+    // <col>;`. A zero or negative would die at runtime with cmdstan's
+    // stock "Error during data block initialization" — no column name,
+    // no row index. Surface it here with the column + row instead. For
+    // user-supplied `.scalarInt` cardinalities we also catch values
+    // that exceed the declared upper bound; auto-derived `N_<col>`
+    // cardinalities are `max(values)` by construction, so the upper
+    // bound is unreachable and skipped.
+    for (column, symbol) in indexColumns {
+      guard let col = model.data[column] else { continue }
+      guard case .integer(let values) = col else { continue }
+      var declaredUpper: Int? = nil
+      if case .scalarInt(let n) = model.data[symbol] { declaredUpper = n }
+      for (i, v) in values.enumerated() {
+        if v < 1 {
+          throw DataInferenceError.indexColumnValueOutOfRange(
+            column: column, atIndex: i, value: v,
+            reason: "values must be >= 1 (Stan declares this column as <lower=1>)")
+        }
+        if let upper = declaredUpper, v > upper {
+          throw DataInferenceError.indexColumnValueOutOfRange(
+            column: column, atIndex: i, value: v,
+            reason: "exceeds cardinality '\(symbol)' = \(upper) declared via data")
+        }
       }
     }
 
