@@ -18,6 +18,8 @@ import Testing
 
 @Suite("Stan sample command tests")
 struct SampleCommandTests {
+  init() { _ = TestCaseRootBootstrap.install }
+
 
   static let cmdstan: String = {
     if let env = ProcessInfo.processInfo.environment["CMDSTAN"], !env.isEmpty {

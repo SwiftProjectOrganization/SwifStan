@@ -16,6 +16,8 @@ import Testing
 
 @Suite("Ulam expression parser tests")
 struct UlamExpressionParserTests {
+  init() { _ = TestCaseRootBootstrap.install }
+
 
   // MARK: - Lexer
 

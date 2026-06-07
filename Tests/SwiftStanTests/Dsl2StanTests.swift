@@ -16,6 +16,8 @@ import Testing
 
 @Suite("dsl2stan command tests")
 struct Dsl2StanTests {
+  init() { _ = TestCaseRootBootstrap.install }
+
 
   static let fixtureModel = "dsl2stan_fixture"
 

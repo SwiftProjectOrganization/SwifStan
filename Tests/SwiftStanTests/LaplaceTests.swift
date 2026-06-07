@@ -18,6 +18,8 @@ import Testing
 
 @Suite("laplace command tests")
 struct LaplaceTests {
+  init() { _ = TestCaseRootBootstrap.install }
+
 
   static let cmdstan: String = {
     if let env = ProcessInfo.processInfo.environment["CMDSTAN"], !env.isEmpty {

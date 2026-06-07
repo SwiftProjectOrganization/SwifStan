@@ -15,6 +15,8 @@ import Testing
 
 @Suite("V2.1 pipeline workflow tests")
 struct V2WorkflowTests {
+  init() { _ = TestCaseRootBootstrap.install }
+
 
   static let cmdstan: String = {
     if let env = ProcessInfo.processInfo.environment["CMDSTAN"], !env.isEmpty {

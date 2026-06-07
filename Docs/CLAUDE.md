@@ -124,7 +124,11 @@ let model = UlamModel(data: ["y": .integer(...), "x": .real(...)]) {
 
 Tests live in `Tests/SwiftStanTests/`; they use Swift Testing (`@Suite` + `@Test` + `#require`/`#expect`), not XCTest. Run a single one with `swift test --filter "<name>"`.
 
-A whole-suite invocation (`swift test`) must succeed against an **empty** `~/Documents/<STAN_CASES>/` directory. Pipeline tests that need a hand-authored fixture (e.g. `howell.csv`, `chimpanzees.csv`, `Chimpanzees.ulam.swift`) **must** stage that fixture themselves before any `#require(fileExists:)`. Don't rely on test ordering — Swift Testing parallelises, and the first run from a fresh checkout is the canonical "does this work?" case.
+A whole-suite invocation (`swift test`) writes all artifacts into a sibling **`~/Documents/<STAN_CASES>_Test/`** dir, not the production `<STAN_CASES>/`. The redirect is wired by `Tests/SwiftStanTests/TestCaseRootBootstrap.swift`: every `@Suite` struct's `init()` references `TestCaseRootBootstrap.install`, which sets `caseRootOverride` (declared in `Sources/SwiftStan/Support/CasePaths.swift`) exactly once at first access. From that point on, every `casePaths(for:)` call resolves under `<STAN_CASES>_Test/`. Production binaries never touch `caseRootOverride` — it stays nil through the CLI's entire lifetime.
+
+The contract: `swift test` must succeed against an **empty** `~/Documents/<STAN_CASES>_Test/` directory. Pipeline tests that need a hand-authored fixture (e.g. `howell.csv`, `chimpanzees.csv`, `Chimpanzees.ulam.swift`) **must** stage that fixture themselves before any `#require(fileExists:)`. Don't rely on test ordering — Swift Testing parallelises, and the first run from a fresh checkout is the canonical "does this work?" case. `StanCases_Test/` is left populated across runs so cmdstan binaries survive (make-style staleness checks skip the rebuild); wipe with `rm -rf ~/Documents/StanCases_Test` to exercise the empty-state contract.
+
+When adding a new `@Suite` struct, add `init() { _ = TestCaseRootBootstrap.install }` as the first member — without it the suite runs against the user's production `<STAN_CASES>/` instead.
 
 Pattern:
 

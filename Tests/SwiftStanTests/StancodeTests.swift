@@ -24,6 +24,8 @@ import Testing
 
 @Suite("stancode command tests")
 struct StancodeTests {
+  init() { _ = TestCaseRootBootstrap.install }
+
 
   static let bernoulliAlist = """
     bernoulli_demo <- ulam(

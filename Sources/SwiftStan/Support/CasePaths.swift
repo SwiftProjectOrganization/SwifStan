@@ -15,9 +15,21 @@ public struct CasePaths {
   public let results: URL
 }
 
-/// Case root resolution: `$STAN_CASES` env var if set, otherwise
-/// `~/Documents/StanCases/`.
+/// Test-only override for the case root, set once at test-bundle load
+/// time via `TestCaseRootBootstrap.install` (see
+/// `Tests/SwiftStanTests/TestCaseRootBootstrap.swift`). When non-nil,
+/// `caseRoot()` returns this verbatim and skips the env / Documents
+/// resolution below. Production binaries never touch this — it stays
+/// nil through the CLI's entire lifetime. `nonisolated(unsafe)` is
+/// safe here because the test bootstrap writes exactly once before any
+/// concurrent test code runs.
+public nonisolated(unsafe) var caseRootOverride: URL? = nil
+
+/// Case root resolution: prefer the test-only `caseRootOverride` (set
+/// by the test bundle on first access), then `$STAN_CASES` env var if
+/// set, otherwise `~/Documents/StanCases/`.
 public func caseRoot() -> URL {
+  if let override = caseRootOverride { return override }
   if let env = ProcessInfo.processInfo.environment["STAN_CASES"],
      !env.isEmpty {
     return URL(fileURLWithPath: (env as NSString).expandingTildeInPath,

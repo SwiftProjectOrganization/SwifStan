@@ -21,6 +21,8 @@ import Testing
 
 @Suite("csv2json command tests")
 struct Csv2JsonTests {
+  init() { _ = TestCaseRootBootstrap.install }
+
 
   @Test func chimpanzeesHappyPath() throws {
     let paths = casePaths(for: "chimpanzees")

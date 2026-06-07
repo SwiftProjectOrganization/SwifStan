@@ -17,6 +17,8 @@ import Testing
 
 @Suite("chainsFromRunInfo tests")
 struct RunInfoChainsTests {
+  init() { _ = TestCaseRootBootstrap.install }
+
 
   /// Write a minimal `<name>_output_config.json` with the given
   /// num_chains + starting id under method=sample. All non-essential

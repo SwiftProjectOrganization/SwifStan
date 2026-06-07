@@ -15,6 +15,8 @@ import Testing
 
 @Suite("alist2dsl command tests")
 struct Alist2DslTests {
+  init() { _ = TestCaseRootBootstrap.install }
+
 
   static let bernoulliAlist = """
     bernoulli_demo <- ulam(

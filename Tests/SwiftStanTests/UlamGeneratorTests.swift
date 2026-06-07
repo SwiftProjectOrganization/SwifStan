@@ -15,6 +15,8 @@ import Testing
 
 @Suite("Ulam generator golden tests")
 struct UlamGeneratorTests {
+  init() { _ = TestCaseRootBootstrap.install }
+
 
   // MARK: - Bernoulli + logit (canonical Statistical Rethinking opener)
 
@@ -1778,6 +1780,8 @@ struct UlamGeneratorTests {
 /// uses (`/Users/rob/Projects/StanSupport/cmdstan`).
 @Suite("Ulam end-to-end artifact tests")
 struct UlamArtifactEmissionTests {
+  init() { _ = TestCaseRootBootstrap.install }
+
 
   static let cmdstan: String = {
     if let env = ProcessInfo.processInfo.environment["CMDSTAN"], !env.isEmpty {

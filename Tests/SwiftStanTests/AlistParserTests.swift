@@ -12,6 +12,8 @@ import Testing
 
 @Suite("Alist parser Slice A tests")
 struct AlistParserTests {
+  init() { _ = TestCaseRootBootstrap.install }
+
 
   static let chimpanzeesAlist = """
     m12.5 <- map2stan(

@@ -23,6 +23,8 @@ import Testing
 
 @Suite("DataInference cardinality-collision tests")
 struct DataInferenceCollisionTests {
+  init() { _ = TestCaseRootBootstrap.install }
+
 
   private func expectCollision<T>(_ block: () throws -> T) {
     do {
