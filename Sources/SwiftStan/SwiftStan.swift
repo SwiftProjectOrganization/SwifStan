@@ -541,9 +541,9 @@ extension SwiftStan {
                                       values: [[0.02, 0.005], [0.005, 0.02]]),
       ]
       return UlamModel(data: data) {
-        Likelihood("y", .multivariateNormal("mu", "Sigma_obs"))
+        Likelihood("y", .multivariateNormal(mu: "mu", sigma: "Sigma_obs"))
         VectorPrior("mu", length: "K",
-                    .multivariateNormal("zero", "Sigma_prior"))
+                    .multivariateNormal(mu: "zero", sigma: "Sigma_prior"))
       }
     }
 
@@ -647,8 +647,8 @@ extension SwiftStan {
         LKJCorrCholeskyPrior("L_Omega", dim: "J", eta: 2)
         VaryingVectorPrior("ab", indexedBy: "cafe", length: "J",
                            .multivariateNormalCholesky(
-                             "[a_bar, b_bar]'",
-                             "diag_pre_multiply(sigma_ab, L_Omega)"))
+                             mean: "[a_bar, b_bar]'",
+                             chol: "diag_pre_multiply(sigma_ab, L_Omega)"))
       }
     }
 

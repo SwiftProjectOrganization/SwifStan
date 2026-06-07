@@ -153,9 +153,9 @@ struct DataInferenceCollisionTests {
                                     values: [[0.02, 0.005], [0.005, 0.02]]),
     ]
     let model = UlamModel(data: data) {
-      Likelihood("y", .multivariateNormal("mu", "Sigma_obs"))
+      Likelihood("y", .multivariateNormal(mu: "mu", sigma: "Sigma_obs"))
       VectorPrior("mu", length: "J",
-                  .multivariateNormal("zero", "Sigma_prior"))
+                  .multivariateNormal(mu: "zero", sigma: "Sigma_prior"))
     }
     #expect(throws: Never.self) { _ = try stancode(model) }
   }

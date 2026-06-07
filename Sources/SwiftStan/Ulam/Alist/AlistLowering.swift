@@ -145,13 +145,13 @@ internal enum AlistLowering {
       return .lognormal(args[0], args[1])
     case "dunif":
       try requireArity(dist, expected: 2, got: args.count)
-      return .uniform(args[0], args[1])
+      return .uniform(lower: args[0], upper: args[1])
     case "dt":
       try requireArity(dist, expected: 3, got: args.count)
-      return .studentT(args[0], args[1], args[2])
+      return .studentT(nu: args[0], mu: args[1], sigma: args[2])
     case "dmvnorm":
       try requireArity(dist, expected: 2, got: args.count)
-      return .multivariateNormal(args[0], args[1])
+      return .multivariateNormal(mu: args[0], sigma: args[1])
     case "dlkjcorr":
       // McElreath's `dlkjcorr(eta)` maps to the Cholesky form — the
       // preferred Stan idiom. The companion `c(...)[...] ~ dmvnormchol(...)`
@@ -199,7 +199,7 @@ internal enum AlistLowering {
       indexedBy: indexColumn,
       length: names.count,
       sigmaName: sigma,
-      dist: .multivariateNormalCholesky(mean, chol),
+      dist: .multivariateNormalCholesky(mean: mean, chol: chol),
       truncation: truncation)
   }
 

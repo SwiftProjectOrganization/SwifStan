@@ -424,7 +424,7 @@ enum BlockEmitter {
       case .wishartPrior(let name, _, let nu, let V):
         // Wishart prior on a cov_matrix parameter.
         priors.append(try emitSampling(lhs: name,
-                                       distribution: .wishart(nu, V),
+                                       distribution: .wishart(nu: nu, V: V),
                                        truncation: .none,
                                        useLpdf: false))
       case .varyingVectorPrior(let name, _, _, _, let dist, let trunc, let useLpdf):

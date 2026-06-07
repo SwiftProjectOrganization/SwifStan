@@ -431,13 +431,13 @@ public struct VectorPrior: ModelStatement {
 
 - `name` — the vector-parameter name. Declared as `vector[<length>] <name>;`.
 - `length` — the cardinality symbol (e.g. `"K"`). Must be bound by at least one Phase-6 data column in `UlamData`.
-- `distribution` — the prior, typically `.multivariateNormal(mu, sigma)`.
+- `distribution` — the prior, typically `.multivariateNormal(mu:, sigma:)`.
 - `truncation` — Stan doesn't support `T[...]` on multivariate distributions, so combining truncation with multivariate priors is rejected.
 - `useLpdf` — `target += _lpdf` form.
 
 #### Emitted Stan
 
-`VectorPrior("mu", length: "K", .multivariateNormal("zero", "Sigma_prior"))` with a `Sigma_prior` declared as `.realCovMatrix(dim: 2, …)` →
+`VectorPrior("mu", length: "K", .multivariateNormal(mu: "zero", sigma: "Sigma_prior"))` with a `Sigma_prior` declared as `.realCovMatrix(dim: 2, …)` →
 
 ```stan
 data {
@@ -558,8 +558,8 @@ public struct VaryingVectorPrior: ModelStatement {
 ```swift
 VaryingVectorPrior("ab", indexedBy: "cafe", length: "J",
                    .multivariateNormalCholesky(
-                     "[a_bar, b_bar]'",
-                     "diag_pre_multiply(sigma_ab, L_Omega)"))
+                     mean: "[a_bar, b_bar]'",
+                     chol: "diag_pre_multiply(sigma_ab, L_Omega)"))
 ```
 
 → `array[N_cafe] vector[J] ab;` + `ab ~ multi_normal_cholesky([a_bar, b_bar]', diag_pre_multiply(sigma_ab, L_Omega));`. Worked example: `varyingVectorPriorMatchesGolden` / `varyingVectorChainedIndexMatchesGolden`. Also exposed via the alist aliases `c(a, b)[cafe] ~ dmvnormchol(...)` and `L_Omega ~ dlkjcorr(eta)`.
@@ -666,7 +666,7 @@ Distance matrix is supplied via `"Dmat": .realMatrix(rows: N, cols: N, values: �
 
 #### Purpose
 
-McElreath Chapter-12 ordered-categorical outcomes. `OrderedCutpoints` declares an `ordered[<K>-1] <name>;` parameter; pair it with `Likelihood("R", .orderedLogistic("phi", "cutpoints"))` (or `.orderedProbit(...)`) and a separate `Prior("cutpoints", .normal(0, 1.5))` for the iid prior across the K-1 cutpoints (Stan vectorises automatically).
+McElreath Chapter-12 ordered-categorical outcomes. `OrderedCutpoints` declares an `ordered[<K>-1] <name>;` parameter; pair it with `Likelihood("R", .orderedLogistic(eta: "phi", cutpoints: "cutpoints"))` (or `.orderedProbit(...)`) and a separate `Prior("cutpoints", .normal(0, 1.5))` for the iid prior across the K-1 cutpoints (Stan vectorises automatically).
 
 #### Signature
 
@@ -679,7 +679,7 @@ public struct OrderedCutpoints: ModelStatement {
 #### Example
 
 ```swift
-Likelihood("R", .orderedLogistic("phi", "cutpoints"))
+Likelihood("R", .orderedLogistic(eta: "phi", cutpoints: "cutpoints"))
 Deterministic("phi", "bA*action + bC*contact + bI*intention")
 Prior("bA", .normal(0, 1))
 Prior("bC", .normal(0, 1))
@@ -747,7 +747,7 @@ public struct Inits: ModelStatement {
 ```swift
 Likelihood("height", .normal("mu", "sigma"))
 Prior("mu", .normal(178, 20))
-Prior("sigma", .uniform(0, 50), truncation: Truncation(lower: 0))
+Prior("sigma", .uniform(lower: 0, upper: 50), truncation: Truncation(lower: 0))
 Inits(["mu": 178.0, "sigma": 25.0])
 ```
 
@@ -775,15 +775,15 @@ Pure metadata — no Stan source emission. Worked example: `V2WorkflowTests.howe
 | `.gamma(shape, rate)` | `gamma(shape, rate)` | `dgamma` |
 | `.cauchy(mu, sigma)` | `cauchy(mu, sigma)` | `dcauchy` |
 | `.lognormal(mu, sigma)` | `lognormal(mu, sigma)` | `dlnorm` |
-| `.uniform(lower, upper)` | `uniform(lower, upper)` | `dunif` |
-| `.studentT(nu, mu, sigma)` | `student_t(nu, mu, sigma)` | `dt` |
-| `.multivariateNormal(mu, sigma)` | `multi_normal(mu, sigma)` | `dmvnorm` |
-| `.multivariateNormalCholesky(mean, chol)` | `multi_normal_cholesky(mean, chol)` | `dmvnormchol` (alist alias) |
+| `.uniform(lower:, upper:)` | `uniform(lower, upper)` | `dunif` |
+| `.studentT(nu:, mu:, sigma:)` | `student_t(nu, mu, sigma)` | `dt` |
+| `.multivariateNormal(mu:, sigma:)` | `multi_normal(mu, sigma)` | `dmvnorm` |
+| `.multivariateNormalCholesky(mean:, chol:)` | `multi_normal_cholesky(mean, chol)` | `dmvnormchol` (alist alias) |
 | `.lkjCorrCholesky(eta)` | `lkj_corr_cholesky(eta)` | `dlkjcorr` (alist alias) |
-| `.wishart(nu, V)` | `wishart(nu, V)` | `dwishart` |
+| `.wishart(nu:, V:)` | `wishart(nu, V)` | `dwishart` |
 | `.dirichlet(alpha)` | `dirichlet(alpha)` | — |
-| `.orderedLogistic(eta, cutpoints)` | `ordered_logistic(eta, cutpoints)` | `dordlogit` |
-| `.orderedProbit(eta, cutpoints)` | `ordered_probit(eta, cutpoints)` | — |
+| `.orderedLogistic(eta:, cutpoints:)` | `ordered_logistic(eta, cutpoints)` | `dordlogit` |
+| `.orderedProbit(eta:, cutpoints:)` | `ordered_probit(eta, cutpoints)` | — |
 
 ### Outcome bounds (auto-inferred)
 

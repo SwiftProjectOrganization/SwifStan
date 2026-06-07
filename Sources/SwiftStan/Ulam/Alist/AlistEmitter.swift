@@ -170,21 +170,21 @@ internal struct AlistEmitter {
     case .lognormal(let mu, let sigma):
       return ".lognormal(\(renderArg(mu)), \(renderArg(sigma)))"
     case .uniform(let lo, let hi):
-      return ".uniform(\(renderArg(lo)), \(renderArg(hi)))"
+      return ".uniform(lower: \(renderArg(lo)), upper: \(renderArg(hi)))"
     case .studentT(let nu, let mu, let sigma):
-      return ".studentT(\(renderArg(nu)), \(renderArg(mu)), \(renderArg(sigma)))"
+      return ".studentT(nu: \(renderArg(nu)), mu: \(renderArg(mu)), sigma: \(renderArg(sigma)))"
     case .multivariateNormal(let mu, let sigma):
-      return ".multivariateNormal(\(renderArg(mu)), \(renderArg(sigma)))"
+      return ".multivariateNormal(mu: \(renderArg(mu)), sigma: \(renderArg(sigma)))"
     case .lkjCorrCholesky(let eta):
       return ".lkjCorrCholesky(\(renderArg(eta)))"
     case .multivariateNormalCholesky(let mean, let chol):
-      return ".multivariateNormalCholesky(\(renderArg(mean)), \(renderArg(chol)))"
+      return ".multivariateNormalCholesky(mean: \(renderArg(mean)), chol: \(renderArg(chol)))"
     case .wishart(let nu, let V):
-      return ".wishart(\(renderArg(nu)), \(renderArg(V)))"
+      return ".wishart(nu: \(renderArg(nu)), V: \(renderArg(V)))"
     case .orderedLogistic(let eta, let cp):
-      return ".orderedLogistic(\(renderArg(eta)), \(renderArg(cp)))"
+      return ".orderedLogistic(eta: \(renderArg(eta)), cutpoints: \(renderArg(cp)))"
     case .orderedProbit(let eta, let cp):
-      return ".orderedProbit(\(renderArg(eta)), \(renderArg(cp)))"
+      return ".orderedProbit(eta: \(renderArg(eta)), cutpoints: \(renderArg(cp)))"
     case .dirichlet(let alpha):
       return ".dirichlet(\(renderArg(alpha)))"
     }

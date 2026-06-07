@@ -47,13 +47,13 @@ public enum Distribution: Hashable, Sendable {
   case gamma(_ shape: DistributionArg, _ rate: DistributionArg)
   case cauchy(_ mu: DistributionArg, _ sigma: DistributionArg)
   case lognormal(_ mu: DistributionArg, _ sigma: DistributionArg)
-  case uniform(_ lower: DistributionArg, _ upper: DistributionArg)
-  case studentT(_ nu: DistributionArg, _ mu: DistributionArg, _ sigma: DistributionArg)
+  case uniform(lower: DistributionArg, upper: DistributionArg)
+  case studentT(nu: DistributionArg, mu: DistributionArg, sigma: DistributionArg)
   // Phase 6 — multivariate normal. `mu` is a vector-typed symbol;
   // `sigma` is a matrix-typed symbol (cov_matrix). The DistributionArg
   // stays scalar-typed in v1 — the symbols are emitted verbatim and
   // Stan catches type mismatches at compile time.
-  case multivariateNormal(_ mu: DistributionArg, _ sigma: DistributionArg)
+  case multivariateNormal(mu: DistributionArg, sigma: DistributionArg)
   // Multivariate hierarchical priors (2026-05-31) — LKJ prior on a
   // Cholesky-factored correlation matrix. Used as the prior on a
   // `cholesky_factor_corr[J]` parameter. The single `eta` arg shapes
@@ -68,18 +68,18 @@ public enum Distribution: Hashable, Sendable {
   // source verbatim; identifier symbols inside the source strings are
   // discovered by tokenisation in DistributionCatalog so the
   // generator doesn't flag them as undeclared.
-  case multivariateNormalCholesky(_ mean: DistributionArg, _ chol: DistributionArg)
+  case multivariateNormalCholesky(mean: DistributionArg, chol: DistributionArg)
   // Wishart prior on a covariance matrix (`cov_matrix[dim]`).
   // `nu` is degrees of freedom (must be > dim - 1); `V` is the
   // scale matrix symbol (typically a `cov_matrix`-typed data column).
-  case wishart(_ nu: DistributionArg, _ V: DistributionArg)
+  case wishart(nu: DistributionArg, V: DistributionArg)
   // Ordered logit (2026-06-02) — discrete outcome 1..K modelled via a
   // latent linear predictor `eta` and K-1 ordered cutpoints. `cutpoints`
   // must be a symbol naming an `ordered[K-1]`-typed parameter declared
   // by a companion `OrderedCutpoints` statement.
-  case orderedLogistic(_ eta: DistributionArg, _ cutpoints: DistributionArg)
+  case orderedLogistic(eta: DistributionArg, cutpoints: DistributionArg)
   // Ordered probit — same structure, probit link instead of logit.
-  case orderedProbit(_ eta: DistributionArg, _ cutpoints: DistributionArg)
+  case orderedProbit(eta: DistributionArg, cutpoints: DistributionArg)
   // Dirichlet (2026-06-02) — multivariate prior on a simplex parameter.
   // `alpha` is a vector-typed symbol giving the per-entry concentration
   // (uniform `rep_vector(2, K)` is a common weakly-informative choice).

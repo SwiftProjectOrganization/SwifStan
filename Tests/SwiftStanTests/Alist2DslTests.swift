@@ -145,7 +145,7 @@ struct Alist2DslTests {
     #expect(swiftSource.contains("LKJCorrCholeskyPrior(\"L_Omega\", dim: \"J\", eta: 2)"))
     // Packed param name "ab" from `c(a, b)`, length J, chol arg uses
     // `diag_pre_multiply(σ, L_Omega)` order.
-    #expect(swiftSource.contains("VaryingVectorPrior(\"ab\", indexedBy: \"cafe\", length: \"J\", .multivariateNormalCholesky(\"[a_bar, b_bar]'\", \"diag_pre_multiply(sigma_ab, L_Omega)\"))"))
+    #expect(swiftSource.contains("VaryingVectorPrior(\"ab\", indexedBy: \"cafe\", length: \"J\", .multivariateNormalCholesky(mean: \"[a_bar, b_bar]'\", chol: \"diag_pre_multiply(sigma_ab, L_Omega)\"))"))
     // L_Omega is a parameter, not data — must not appear in the data literal.
     #expect(!swiftSource.contains("\"L_Omega\": .real("))
   }

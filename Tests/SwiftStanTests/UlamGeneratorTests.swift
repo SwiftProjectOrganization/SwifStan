@@ -328,9 +328,9 @@ struct UlamGeneratorTests {
       "Sigma_obs":   .realCovMatrix(dim: 2, values: [[0.2, 0.05], [0.05, 0.2]]),
     ]
     let model = UlamModel(data: data) {
-      Likelihood("y", .multivariateNormal("mu", "Sigma_obs"))
+      Likelihood("y", .multivariateNormal(mu: "mu", sigma: "Sigma_obs"))
       VectorPrior("mu", length: "K",
-                  .multivariateNormal("zero", "Sigma_prior"))
+                  .multivariateNormal(mu: "zero", sigma: "Sigma_prior"))
     }
 
     let expected = """
@@ -362,7 +362,7 @@ struct UlamGeneratorTests {
     ]
     let model = UlamModel(data: data) {
       VectorPrior("mu", length: "K",
-                  .multivariateNormal("zero", "Sigma"),
+                  .multivariateNormal(mu: "zero", sigma: "Sigma"),
                   truncation: Truncation(lower: 0))
     }
     #expect(throws: DataInferenceError.self) {
@@ -706,7 +706,7 @@ struct UlamGeneratorTests {
       "intention": .integer([1, 1, 0, 0, 1]),
     ]
     let model = UlamModel(data: data) {
-      Likelihood("R", .orderedLogistic("phi", "cutpoints"))
+      Likelihood("R", .orderedLogistic(eta: "phi", cutpoints: "cutpoints"))
       Deterministic("phi", "bA*action + bC*contact + bI*intention")
       Prior("bA", .normal(0, 0.5))
       Prior("bC", .normal(0, 0.5))
@@ -757,7 +757,7 @@ struct UlamGeneratorTests {
       "intention": .integer([1, 1, 0, 0, 1]),
     ]
     let model = UlamModel(data: data) {
-      Likelihood("R", .orderedProbit("phi", "cutpoints"))
+      Likelihood("R", .orderedProbit(eta: "phi", cutpoints: "cutpoints"))
       Deterministic("phi", "bA*action + bC*contact + bI*intention")
       Prior("bA", .normal(0, 0.5))
       Prior("bC", .normal(0, 0.5))
@@ -1052,8 +1052,8 @@ struct UlamGeneratorTests {
       LKJCorrCholeskyPrior("L_Omega", dim: "J", eta: 2)
       VaryingVectorPrior("ab", indexedBy: "cafe", length: "J",
                          .multivariateNormalCholesky(
-                           "[a_bar, b_bar]'",
-                           "diag_pre_multiply(sigma_ab, L_Omega)"))
+                           mean: "[a_bar, b_bar]'",
+                           chol: "diag_pre_multiply(sigma_ab, L_Omega)"))
     }
 
     let expected = """
@@ -1107,8 +1107,8 @@ struct UlamGeneratorTests {
       LKJCorrCholeskyPrior("L_Omega", dim: "J", eta: 2)
       VaryingVectorPrior("ab", indexedBy: "cafe", length: "J",
                          .multivariateNormalCholesky(
-                           "[a_bar, b_bar]'",
-                           "diag_pre_multiply(sigma_ab, L_Omega)"))
+                           mean: "[a_bar, b_bar]'",
+                           chol: "diag_pre_multiply(sigma_ab, L_Omega)"))
     }
 
     let expected = """
@@ -1182,7 +1182,7 @@ struct UlamGeneratorTests {
       MatrixPrior("beta", rows: "K", cols: "J", .normal(0, 1))
       CovMatrixPrior("Sigma", dim: "J")
       Deterministic("mu", "x[n]*beta")
-      Likelihood("y", .multivariateNormal("mu", "Sigma"))
+      Likelihood("y", .multivariateNormal(mu: "mu", sigma: "Sigma"))
     }
 
     let expected = """
@@ -1531,7 +1531,7 @@ struct UlamGeneratorTests {
     let model = UlamModel(data: data) {
       Likelihood("y", .normal("mu", "sigma"))
       Prior("mu", .normal(178, 20), start: 178.0)
-      Prior("sigma", .uniform(0, 50),
+      Prior("sigma", .uniform(lower: 0, upper: 50),
             constraints: Constraints(lower: 0),
             start: 10.0)
     }
@@ -1709,16 +1709,16 @@ struct UlamGeneratorTests {
       LKJCorrCholeskyPrior("L_subject", dim: "J_subject", eta: 2)
       VaryingVectorPrior("ab_subject", indexedBy: "subject", length: "J_subject",
                          .multivariateNormalCholesky(
-                           "[a_bar, b_bar]'",
-                           "diag_pre_multiply(sigma_subject, L_subject)"))
+                           mean: "[a_bar, b_bar]'",
+                           chol: "diag_pre_multiply(sigma_subject, L_subject)"))
       // item grouping (crossed)
       VectorPrior("sigma_item", length: "J_item", .exponential(1),
                   truncation: Truncation(lower: 0))
       LKJCorrCholeskyPrior("L_item", dim: "J_item", eta: 2)
       VaryingVectorPrior("ab_item", indexedBy: "item", length: "J_item",
                          .multivariateNormalCholesky(
-                           "[a_bar, b_bar]'",
-                           "diag_pre_multiply(sigma_item, L_item)"))
+                           mean: "[a_bar, b_bar]'",
+                           chol: "diag_pre_multiply(sigma_item, L_item)"))
     }
 
     let expected = """
@@ -1973,7 +1973,7 @@ struct UlamArtifactEmissionTests {
       MatrixPrior("beta", rows: "K", cols: "J", .normal(0, 5))
       CovMatrixPrior("Sigma", dim: "J")
       Deterministic("mu", "x[n]*beta")
-      Likelihood("y", .multivariateNormal("mu", "Sigma"))
+      Likelihood("y", .multivariateNormal(mu: "mu", sigma: "Sigma"))
     }
 
     let result = ulam(model, name: "sur", cmdstan: Self.cmdstan)
@@ -2272,9 +2272,9 @@ struct DmvnormSmoke {
     ]
 
     let model = UlamModel(data: data) {
-      Likelihood("y", .multivariateNormal("mu", "Sigma_obs"))
+      Likelihood("y", .multivariateNormal(mu: "mu", sigma: "Sigma_obs"))
       VectorPrior("mu", length: "K",
-                  .multivariateNormal("zero", "Sigma_prior"))
+                  .multivariateNormal(mu: "zero", sigma: "Sigma_prior"))
     }
 
     do {
@@ -2343,8 +2343,8 @@ struct CafeSmoke {
       LKJCorrCholeskyPrior("L_Omega", dim: "J", eta: 2)
       VaryingVectorPrior("ab", indexedBy: "cafe", length: "J",
                          .multivariateNormalCholesky(
-                           "[a_bar, b_bar]'",
-                           "diag_pre_multiply(sigma_ab, L_Omega)"))
+                           mean: "[a_bar, b_bar]'",
+                           chol: "diag_pre_multiply(sigma_ab, L_Omega)"))
     }
 
     do {
