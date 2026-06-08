@@ -37,6 +37,12 @@ internal enum LoweredAlistStatement: Equatable {
                            dist: Distribution,
                            truncation: Truncation)
   case link(function: LinkFunction, target: String, rhs: ExpressionNode)
+  /// Bare `<target> <- <rhs>` — McElreath's "linear model" line that
+  /// isn't behind a real link function (logit / log / cloglog). The
+  /// canonical AST emits this as `Statement.deterministic(lhs:rhs:)`
+  /// — see `AlistToUlamModel.build(_:)`. Routed here from
+  /// `AlistLink.identity` in `lower(_:)`.
+  case deterministic(target: String, rhs: ExpressionNode)
 }
 
 internal enum AlistLoweringError: Error, CustomStringConvertible {
@@ -64,6 +70,12 @@ internal enum AlistLowering {
     var out: [LoweredAlistStatement] = []
     for stmt in statements {
       switch stmt {
+      case .link(.identity, let target, let rhs):
+        // Bare `<target> <- <rhs>` — produce a deterministic
+        // assignment, not a real link. Downstream
+        // `Statement.deterministic` carries it through to the model
+        // block as a plain `<target> = <rhs>;`.
+        out.append(.deterministic(target: target, rhs: rhs))
       case .link(let fn, let target, let rhs):
         out.append(.link(function: try lowerLink(fn),
                          target: target,
@@ -101,7 +113,11 @@ internal enum AlistLowering {
     switch link {
     case .logit: return .logit
     case .log:   return .log
-    case .cloglog, .identity:
+    case .cloglog:
+      throw AlistLoweringError.unsupportedLink(link)
+    case .identity:
+      // `.identity` is routed to `LoweredAlistStatement.deterministic`
+      // upstream in `lower(_:)`; it never reaches the lowerLink path.
       throw AlistLoweringError.unsupportedLink(link)
     }
   }

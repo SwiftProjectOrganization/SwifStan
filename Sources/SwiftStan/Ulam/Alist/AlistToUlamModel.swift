@@ -113,6 +113,14 @@ internal enum AlistToUlamModel {
         out.append(.link(function: fn,
                          lhs: stmt.name,
                          rhs: Expression(source)))
+      case .deterministic:
+        // Bare `<name> <- <rhs>` from the alist front-end. Routed
+        // through `Statement.deterministic` so the BlockEmitter writes
+        // a plain `<name> = <rhs>;` line in the model block (no
+        // inv_logit / exp wrapper).
+        let source = AlistEmitter.canonicalExpression(stmt.linkRhs!)
+        out.append(.deterministic(lhs: stmt.name,
+                                  rhs: Expression(source)))
       }
     }
     return out

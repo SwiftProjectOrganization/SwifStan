@@ -151,4 +151,43 @@ struct Alist2DslTests {
     // L_Omega is a parameter, not data — must not appear in the data literal.
     #expect(!swiftSource.contains("\"L_Omega\": .real("))
   }
+
+  // MARK: - Identity-link / bare deterministic emission
+
+  /// McElreath's bare `<name> <- <expr>` form should render as a
+  /// `Deterministic("...", "...")` DSL call in the emitted smoke
+  /// driver — never as `Link(...)` (which would wrap the RHS in
+  /// `inv_logit` / `exp`). Synthetic measurement-error alist (cf.
+  /// alist10 from `Docs/TestResults.md`).
+  static let measurementErrorAlist = """
+    me_demo <- ulam(
+      alist(
+        div_obs ~ dnorm(div_est, div_sd),
+        mu <- a + bA*A + bR*R,
+        a ~ dnorm(0, 10),
+        bA ~ dnorm(0, 10),
+        bR ~ dnorm(0, 10),
+        sigma ~ dcauchy(0, 2.5)
+      ),
+      data=d )
+    """
+
+  @Test func bareDeterministicEmitsDeterministicDsl() throws {
+    let model = "alist2dsl_deterministic_fixture"
+    let paths = casePaths(for: model)
+    try ensureCaseDirectories(paths)
+    defer { try? FileManager.default.removeItem(at: caseRoot().appendingPathComponent(model)) }
+
+    let alistURL = paths.preliminaries.appendingPathComponent("\(model).alist.R")
+    try Self.measurementErrorAlist.write(to: alistURL, atomically: true, encoding: .utf8)
+
+    let swiftURL = try alist2dsl(model: model)
+    let swiftSource = try String(contentsOf: swiftURL, encoding: .utf8)
+
+    // `mu <- a + bA*A + bR*R` should produce a Deterministic call,
+    // NOT a Link call (which would inv_logit / exp the RHS).
+    #expect(swiftSource.contains("Deterministic(\"mu\", \"a + bA*A + bR*R\")"))
+    #expect(!swiftSource.contains("Link(.logit, lhs: \"mu\""))
+    #expect(!swiftSource.contains("Link(.log, lhs: \"mu\""))
+  }
 }

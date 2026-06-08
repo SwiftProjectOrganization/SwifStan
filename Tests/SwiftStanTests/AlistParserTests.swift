@@ -135,4 +135,42 @@ struct AlistParserTests {
     #expect(dist.name == "dlkjcorr")
     #expect(dist.args == [.literal(.integer(2))])
   }
+
+  // MARK: - Bare-identifier (identity-link / deterministic) parsing
+
+  /// McElreath's bare `<target> <- <expr>` form should parse as an
+  /// identity-link AST node; the lowering pass turns it into a
+  /// `Statement.deterministic(...)` downstream.
+  @Test func bareIdentifierLhsParsesAsIdentityLink() throws {
+    let src = "alist(mu <- a + bA*A + bR*R)"
+    let stmts = try AlistParser.parse(src)
+    #expect(stmts.count == 1)
+    guard case let .link(fn, target, _) = stmts[0] else {
+      Issue.record("statement should be a link"); return
+    }
+    #expect(fn == .identity)
+    #expect(target == "mu")
+  }
+
+  /// Bare deterministic alongside a likelihood — verify both
+  /// statements parse and order is preserved.
+  @Test func bareIdentifierLhsAndLikelihoodCoexist() throws {
+    let src = """
+    alist(
+      div_obs ~ dnorm(div_est, div_sd),
+      mu <- a + bA*A + bR*R
+    )
+    """
+    let stmts = try AlistParser.parse(src)
+    #expect(stmts.count == 2)
+    if case .sample = stmts[0] {} else {
+      Issue.record("statement 0 should be a sample")
+    }
+    if case let .link(fn, target, _) = stmts[1] {
+      #expect(fn == .identity)
+      #expect(target == "mu")
+    } else {
+      Issue.record("statement 1 should be a link")
+    }
+  }
 }

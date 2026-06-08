@@ -45,6 +45,11 @@ internal struct ClassifiedAlist: Equatable {
       /// back to "J" and the user must supply it via data.
       case lkjCorrCholeskyPrior(dim: String)
       case link(LinkFunction)
+      /// Bare `<name> <- <rhs>` — McElreath's deterministic
+      /// assignment line. Stored with `linkRhs` carrying the RHS
+      /// expression so emitter passes can reuse the same canonicalised
+      /// source path as `.link`.
+      case deterministic
     }
     internal let kind: Kind
     internal let name: String          // outcome / param / link target
@@ -177,6 +182,12 @@ internal enum AlistClassify {
           linkRhs: nil))
       case .link(let fn, let target, let rhs):
         statements.append(.init(kind: .link(fn),
+                                name: target,
+                                dist: nil,
+                                truncation: .none,
+                                linkRhs: rhs))
+      case .deterministic(let target, let rhs):
+        statements.append(.init(kind: .deterministic,
                                 name: target,
                                 dist: nil,
                                 truncation: .none,

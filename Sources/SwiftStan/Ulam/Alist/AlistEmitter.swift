@@ -126,6 +126,9 @@ internal struct AlistEmitter {
         s += "      Likelihood(\"\(stmt.name)\", \(renderDist(stmt.dist!)))\n"
       case .link(let fn):
         s += "      Link(.\(fn.dslCase), lhs: \"\(stmt.name)\", rhs: \"\(renderLinkRhs(stmt.linkRhs!))\")\n"
+      case .deterministic:
+        // Bare `<name> <- <rhs>` → `Deterministic("<name>", "<rhs>")`.
+        s += "      Deterministic(\"\(stmt.name)\", \"\(renderLinkRhs(stmt.linkRhs!))\")\n"
       case .scalarPrior:
         let trunc = renderTruncation(stmt.truncation)
         s += "      Prior(\"\(stmt.name)\", \(renderDist(stmt.dist!))\(trunc))\n"

@@ -154,7 +154,20 @@ internal enum AlistParser {
   private static func parseLink(lhs: [AlistToken],
                                 rhs: [AlistToken],
                                 in source: String) throws -> AlistStatement {
-    // Expected shape: <ident> ( <ident> )
+    // Two accepted LHS shapes:
+    //   1. `<ident>(<ident>)` — link-wrapped target (e.g. `logit(p)`).
+    //   2. `<ident>`          — bare deterministic (e.g. `mu`); lowered
+    //                           through `AlistLink.identity` →
+    //                           `Statement.deterministic` rather than
+    //                           through a real link function.
+    // McElreath's alists use form (2) for any `<name> <- <expr>` line
+    // that isn't behind logit/log/cloglog. Indexed bare LHS
+    // (`mu[i] <- …`) isn't accepted yet — tracked in TODO §2.
+    if lhs.count == 1, lhs[0].kind == .identifier {
+      let target = lhs[0].lexeme
+      let rhsNode = try parseExpression(tokens: rhs, in: source)
+      return .link(function: .identity, target: target, rhs: rhsNode)
+    }
     guard lhs.count == 4,
           lhs[0].kind == .identifier,
           lhs[1].kind == .leftParen,
@@ -162,7 +175,7 @@ internal enum AlistParser {
           lhs[3].kind == .rightParen else {
       throw AlistParserError.unexpectedToken(
         lhs.first ?? AlistToken(kind: .eof, lexeme: "", position: 0),
-        expected: "<link>(<target>)")
+        expected: "<link>(<target>) or <target>")
     }
     let fnName = lhs[0].lexeme
     let target = lhs[2].lexeme
