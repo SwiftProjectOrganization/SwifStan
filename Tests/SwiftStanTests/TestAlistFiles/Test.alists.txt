@@ -1,6 +1,6 @@
 alist(
 	log_radon ~ dnorm(alpha[county] + beta * floor, sigma),  
-	alpha ~ dnorm(0, 10),
+	alpha[county] ~ dnorm(0, 10),
 	beta ~ dnorm(0, 10),
 	sigma ~ dnorm(0, 10)
 )
@@ -30,20 +30,6 @@ alist(
 		bc*contact_high + bpc*contact_high*log_pop,
 	a ~ dnorm(0,100),
 	c(bp,bc,bpc) ~ dnorm(0,1)
-)
-
-alist(
-	career ~ dcategorical( softmax(0,s2,s3) ),
-	s2 <- b*2,    # linear model for event type 2
-	s3 <- b*3,    # linear model for event type 3
-	b ~ dnorm(0,5)
-)
-
-alist(
-	response ~ dordlogit( phi , c(a1,a2,a3,a4,a5,a6) ) ,
-	phi <- bA*action + bI*intention + bC*contact,
-	c(bA,bI,bC) ~ dnorm(0,10),
-	c(a1,a2,a3,a4,a5,a6) ~ dnorm(0,10)
 )
 
 alist(

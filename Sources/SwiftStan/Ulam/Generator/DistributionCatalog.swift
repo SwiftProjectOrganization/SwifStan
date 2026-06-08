@@ -114,8 +114,15 @@ enum DistributionCatalog {
     // identifiers and filter Stan helpers so DataInference's
     // referenced-symbol check sees only the user-named symbols.
     if case .multivariateNormalCholesky(let mean, let chol) = distribution {
-      let strings = [mean, chol].compactMap {
-        if case .symbol(let s) = $0 { return s } else { return nil }
+      // Both `.symbol` (the historical shape — string-literal init
+      // collapses to it) and `.expression` (post-2026-06-08) carry a
+      // compound source string here; both tokenise identically.
+      let strings = [mean, chol].compactMap { arg -> String? in
+        switch arg {
+        case .symbol(let s):     return s
+        case .expression(let s): return s
+        case .literal:           return nil
+        }
       }
       return strings.flatMap { tokenizeIdentifiers($0) }
     }
@@ -140,8 +147,17 @@ enum DistributionCatalog {
          .orderedProbit(let eta, let c):    parts = [eta, c]
     case .dirichlet(let alpha):             parts = [alpha]
     }
-    return parts.compactMap {
-      if case .symbol(let s) = $0 { return s } else { return nil }
+    // `.symbol` args contribute their bare identifier directly;
+    // `.expression` args are compound source — tokenise to harvest
+    // every identifier mention, filtered against the Stan-helper
+    // builtin set so DataInference doesn't reject the model as
+    // undeclared. Literals contribute nothing.
+    return parts.flatMap { arg -> [String] in
+      switch arg {
+      case .symbol(let s):     return [s]
+      case .expression(let s): return tokenizeIdentifiers(s)
+      case .literal:           return []
+      }
     }
   }
 
@@ -261,6 +277,11 @@ enum DistributionCatalog {
         return String(x)
       }
     case .symbol(let s):
+      return s
+    case .expression(let s):
+      // Verbatim Stan source — same emission as .symbol, but the
+      // semantics differ for `symbolsReferenced`: a compound source
+      // string gets tokenised into its identifier set there.
       return s
     }
   }

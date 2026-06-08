@@ -202,6 +202,13 @@ internal struct AlistEmitter {
       return "\(v)"
     case .symbol(let n):
       return "\"\(n)\""
+    case .expression(let s):
+      // Compound expression — render as `.expression("…")` rather than
+      // the bare string literal so round-tripping through `dsl2stan`
+      // preserves the semantic distinction (string-literal init goes
+      // to `.symbol`, which would mis-classify the embedded
+      // identifiers in `symbolsReferenced`).
+      return ".expression(\"\(s)\")"
     }
   }
 

@@ -207,6 +207,66 @@ struct UlamGeneratorTests {
             "non-binomial models shouldn't emit transformed data")
   }
 
+  // MARK: - DistributionArg.expression (2026-06-08, TestResults §2)
+
+  /// `.expression("…")` in a distribution-arg slot renders verbatim
+  /// into the emitted Stan source — the linear predictor goes straight
+  /// into the `~` line without being lifted to a separate `mu = …;`
+  /// assignment. The tokenised identifiers (`alpha`, `beta`, `x`) all
+  /// flow into the data block via `symbolsReferenced`.
+  @Test func distributionArgExpressionEmitsVerbatim() throws {
+    let data: UlamData = [
+      "y": .real([0.1, 0.2, 0.3, 0.4]),
+      "x": .real([1.0, 2.0, 3.0, 4.0]),
+    ]
+    let model = UlamModel(data: data) {
+      Likelihood("y", .normal(.expression("alpha + beta*x"), "sigma"))
+      Prior("alpha", .normal(0, 10))
+      Prior("beta", .normal(0, 10))
+      Prior("sigma", .normal(0, 10), truncation: Truncation(lower: 0))
+    }
+    let stan = try stancode(model)
+    // Verbatim emission: the `alpha + beta*x` source appears as the
+    // mu arg of `normal(...)` directly.
+    #expect(stan.contains("y ~ normal(alpha + beta*x, sigma);"),
+            "expected verbatim expression in the sampling line; got:\n\(stan)")
+    // Identifiers from the expression were harvested into the parameter
+    // / data declaration sets (alpha + beta were declared via Prior →
+    // they're parameters; the expression-tokeniser keeps them off the
+    // data block).
+    #expect(stan.contains("real alpha;"))
+    #expect(stan.contains("real beta;"))
+    #expect(stan.contains("vector[N] x;"),
+            "expected `x` from the expression to land as data")
+  }
+
+  /// Round-trip the alist-1 shape (`dnorm(<expr>, sigma)`) through the
+  /// DSL directly to confirm the new lowering path produces Stan whose
+  /// data block declares the index column. The alist-side end-to-end
+  /// (parsing the .alist.R fixture) needs a CSV with `county` data —
+  /// that's `csv2json` territory and out of scope here.
+  @Test func expressionArgWithIndexedReferenceEmitsIndexColumn() throws {
+    let data: UlamData = [
+      "log_radon": .real([1.1, 1.2, 1.3, 1.4]),
+      "county":    .integer([1, 2, 1, 2]),
+      "floor":     .real([0, 1, 0, 1]),
+    ]
+    let model = UlamModel(data: data) {
+      Likelihood("log_radon",
+                 .normal(.expression("alpha[county] + beta*floor"), "sigma"))
+      VaryingPrior("alpha", indexedBy: "county", .normal(0, 10))
+      Prior("beta", .normal(0, 10))
+      Prior("sigma", .normal(0, 10), truncation: Truncation(lower: 0))
+    }
+    let stan = try stancode(model)
+    #expect(stan.contains("array[N] int<lower=1, upper=N_county> county;"),
+            "expected county to be declared as an index column")
+    #expect(stan.contains("vector[N_county] alpha;"),
+            "expected alpha to be a vector parameter keyed on county")
+    #expect(stan.contains("log_radon ~ normal(alpha[county] + beta*floor, sigma);"),
+            "expected verbatim indexed expression on the sampling line; got:\n\(stan)")
+  }
+
   // MARK: - Phase 4 error paths
 
   @Test func truncationWithLpdfIsRejected() throws {

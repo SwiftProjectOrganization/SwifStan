@@ -15,6 +15,15 @@ import Foundation
 public enum DistributionArg: Hashable, Sendable {
   case literal(Double)
   case symbol(String)
+  /// Verbatim Stan source for a compound expression — e.g.
+  /// `.normal(.expression("alpha[county] + beta*x"), "sigma")`.
+  /// Renders identically to `.symbol` (emitted as-is by
+  /// `DistributionCatalog.arg(_:)`), but `symbolsReferenced(_:)`
+  /// tokenises the source to harvest the embedded identifiers
+  /// (`alpha`, `county`, `beta`, `x`) so they end up in the
+  /// referenced-symbol set the data-block emitter walks.
+  /// 2026-06-08, TestResults §2.
+  case expression(String)
 }
 
 extension DistributionArg: ExpressibleByIntegerLiteral {

@@ -372,6 +372,11 @@ enum DataInference {
             default:
               break
             }
+          case .expression:
+            // Compound trials expression (e.g. `dbinom(2*N, p)`) —
+            // can't be tightened or row-checked statically. Leave
+            // upper unset and rely on Stan's runtime check.
+            break
           }
         }
         if !bounds.isEmpty { outcomeBoundsByLhs[lhs] = bounds }

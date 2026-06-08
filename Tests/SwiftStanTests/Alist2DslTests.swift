@@ -190,4 +190,44 @@ struct Alist2DslTests {
     #expect(!swiftSource.contains("Link(.logit, lhs: \"mu\""))
     #expect(!swiftSource.contains("Link(.log, lhs: \"mu\""))
   }
+
+  // MARK: - DistributionArg.expression smoke-driver rendering
+
+  /// `dnorm(<compound expr>, sigma)` lowers to
+  /// `.normal(.expression("<src>"), "sigma")`; the smoke driver render
+  /// should preserve the explicit `.expression("…")` wrapper so a
+  /// round trip through `dsl2stan` keeps the semantic distinction
+  /// (string-literal init goes to `.symbol`, which would mis-classify
+  /// the embedded identifiers).
+  static let radonAlistInlineMu = """
+    radon_demo <- ulam(
+      alist(
+        log_radon ~ dnorm(alpha[county] + beta * floor, sigma),
+        alpha ~ dnorm(0, 10),
+        beta ~ dnorm(0, 10),
+        sigma ~ dnorm(0, 10)
+      ),
+      data=d )
+    """
+
+  @Test func compoundDistributionArgEmitsExpressionWrapper() throws {
+    let model = "alist2dsl_expression_fixture"
+    let paths = casePaths(for: model)
+    try ensureCaseDirectories(paths)
+    defer { try? FileManager.default.removeItem(at: caseRoot().appendingPathComponent(model)) }
+
+    let alistURL = paths.preliminaries.appendingPathComponent("\(model).alist.R")
+    try Self.radonAlistInlineMu.write(to: alistURL, atomically: true, encoding: .utf8)
+
+    let swiftURL = try alist2dsl(model: model)
+    let swiftSource = try String(contentsOf: swiftURL, encoding: .utf8)
+
+    // The mu arg in `dnorm(...)` is a compound expression — should
+    // round-trip as `.expression("alpha[county] + beta*floor")`.
+    #expect(swiftSource.contains(".expression(\"alpha[county] + beta*floor\")"),
+            "expected .expression(...) wrapper around the compound dnorm arg; got:\n\(swiftSource)")
+    // The sigma arg stays as a bare-string symbol (1-token identifier).
+    #expect(swiftSource.contains(", \"sigma\")"),
+            "expected the bare `sigma` arg to stay as a string-literal symbol")
+  }
 }

@@ -5,50 +5,53 @@ Coverage of the 10 alist test cases in
 `swiftstan stancode --model alist<N>` (in-process alist → `UlamModel` →
 Stan source path; no CSV data attached).
 
-| # | Description | Status (2026-06-07) | Status (2026-06-08, identity-link landed) |
-|---|---|---|---|
-| 1 | Radon (vectorised likelihood) | ❌ FAIL — lower | ❌ FAIL — lower (unchanged) |
-| 2 | Radon (deterministic `mu <-`) | ❌ FAIL — parse | ❌ FAIL — *the alist file is missing a comma after the `mu <-` line; with that fixed, it parses cleanly and hits the next blocker (indexed `alpha[county]` RHS needs a `VaryingPrior`).* |
-| 3 | UCB binomial with `snorm` / `half_normal` | ❌ FAIL — lower | ❌ FAIL — lower (unchanged) |
-| 4 | Tools / Poisson with grouped prior | ✅ PASS | ✅ PASS (unchanged) |
-| 5 | Categorical with `softmax` | ❌ FAIL — parse | ❌ FAIL — parse (unchanged) |
-| 6 | Ordered logit with `c(a1..a6)` cutpoints | ❌ FAIL — parse | ❌ FAIL — lower (now: `dordlogit` not in catalog) |
-| 7 | Reedfrog varying-intercept binomial | ✅ PASS (caveat) | ✅ PASS (unchanged) |
-| 8 | Cafe varying-effects via `dmvnorm2` | ❌ FAIL — parse | ❌ FAIL — generate (now: `Rho` flagged as multivariate-with-truncation) |
-| 9 | Crossed chimpanzees via `dmvnorm2` × 2 | ❌ FAIL — parse | ❌ FAIL — generate (same as 8, for `Rho_actor`/`Rho_block`) |
-| 10 | Measurement error (Waffle / divorce) | ❌ FAIL — parse | ✅ PASS |
+The user re-curated the test corpus on 2026-06-08, dropping the
+`dcategorical/softmax` and `dordlogit` cases (both known
+architectural-lift territory) and revising alist 1 to use the explicit
+`alpha[county] ~ dnorm(...)` varying form. The renumbered table:
 
-**Score:** 3 / 10 generate Stan source (was 2 / 10); 5 of the 8
-failures (alists 2, 6, 8, 9, 10) moved past the parser into the
-lowering or generate stage.
+| # | Description | Status (2026-06-08, post `.expression` lift) |
+|---|---|---|
+| 1 | Radon — varying intercept w/ inline `alpha[county]` in `dnorm` mean | ✅ PASS — `stancode` generates the canonical hierarchical Stan source (varying `vector[N_county] alpha;`, `array[N] int<lower=1, upper=N_county> county;`, verbatim sampling line). Downstream `csv2json` against `radon.csv` blocks on the `county` column being a state-name string rather than an integer — orthogonal "auto-factorise string columns referenced as integer indices" feature, not a code-gen issue. |
+| 2 | Radon (deterministic `mu <-`) | ❌ FAIL — alist file is missing a comma after the `mu <-` line; with that fixed, it parses cleanly and hits the next blocker (indexed `alpha[county]` RHS in a Deterministic line needs `alpha` declared as a `VaryingPrior`). |
+| 3 | UCB binomial with `snorm` / `half_normal` | ❌ FAIL — lower (`snorm` not in V1 catalog). |
+| 4 | Tools / Poisson with grouped prior | ✅ PASS |
+| 5 | Reedfrog varying-intercept binomial *(was #7)* | ✅ PASS (caveat: `density` typed as `vector[N]` when running `stancode` without a CSV — `csv2json` would correct that). |
+| 6 | Cafe varying-effects via `dmvnorm2` *(was #8)* | ❌ FAIL — generate (`Rho` flagged as multivariate-with-truncation; classify pass shouldn't be auto-truncating `dlkjcorr` priors). |
+| 7 | Crossed chimpanzees via `dmvnorm2` × 2 *(was #9)* | ❌ FAIL — generate (same as #6, for `Rho_actor` / `Rho_block`). |
+| 8 | Measurement error (Waffle / divorce) *(was #10)* | ✅ PASS |
 
-Recurring blockers (post-identity-link), ranked by how many test cases
-each one trips:
+**Score:** **4 / 8** generate Stan source (was 3 / 10 against the
+larger corpus). The `.expression` lift specifically unblocked alist 1
+end-to-end at the `stancode` level — the canonical McElreath radon
+form (`dnorm(alpha[county] + beta*floor, sigma)` paired with
+`alpha[county] ~ dnorm(0,10)`) now produces clean Stan.
+
+Recurring blockers (post `.expression` lift), ranked by how many test
+cases each one trips:
 
 1. **Missing distributions in the alist catalog** — `snorm`,
-   `half_normal`, `dcategorical`, `dmvnorm2`, `dordlogit`. Tripped by
-   alists 3, 5, 6, 8, 9. (Of these, `dordlogit` was previously masked
-   by the parser blocker; identity-link landing now surfaces it.)
-2. **Expressions inside distribution-arg slots** — `dnorm(alpha[county]
-   + beta*floor, sigma)` (alist 1). The lowering pass requires each
-   arg to be a literal or a single identifier; expressions there must
-   be extracted into a deterministic line first.
-3. **Expression-parser handling of `softmax(0, s2, s3)`** (alist 5).
-   The parser rejects the second comma — it treats the multi-arg
-   function call as a malformed identifier expression. Same likely
-   true for other multi-arg helper functions.
-4. **Indexed RHS without a paired VaryingPrior** — alist 2 (corrected
+   `half_normal`, `dmvnorm2`. Tripped by alists 3, 6, 7.
+2. **`Rho ~ dlkjcorr(...)` getting flagged as multivariate-with-truncation**
+   (alists 6, 7). The classify pass appears to be auto-promoting a
+   truncation onto `Rho` (likely from the σ-truncation inference
+   heuristic firing on it). Worth investigating — `dlkjcorr` priors
+   should be exempt from the σ-truncation pass.
+3. **Indexed RHS without a paired VaryingPrior** — alist 2 (corrected
    form). `mu <- alpha[county] + beta*floor` references `alpha[county]`
    but `alpha` is declared as a scalar `dnorm(0,10)` prior. The
    generator's loop emitter triggers but has no `VaryingPrior(...)`
    declaration to bind `alpha` to a vector type. Either auto-promote
    `alpha` to a vector parameter on detecting the indexed reference,
-   or require the user to use `a[county] ~ dnorm(...)` form explicitly.
-5. **`Rho ~ dlkjcorr(...)` getting flagged as multivariate-with-truncation**
-   (alists 8, 9). The classify pass appears to be auto-promoting a
-   truncation onto `Rho` (likely from the σ-truncation inference
-   heuristic firing on it). Worth investigating — `dlkjcorr` priors
-   should be exempt from the σ-truncation pass.
+   or require the user to use `a[county] ~ dnorm(...)` form explicitly
+   (as alist 1 already does).
+4. **String columns referenced as integer indices** (alist 1
+   downstream). `radon.csv` has `county` as a state-name string
+   (`"AITKIN"`, etc.); `csv2json` rejects with "non-integer value".
+   `rethinking` auto-factorises such columns; SwiftStan doesn't.
+   Workaround today: pre-process the CSV to add an integer factor
+   column, or rename in the alist (alist 1 uses `county`; the radon
+   CSV has `county_code` for the int form).
 
 Details below.
 
@@ -227,30 +230,28 @@ whose elements are themselves sampled from a normal. Non-trivial; deferred.
 
 ## Next-step recommendations
 
-In order of payoff per LOC (post-identity-link):
+In order of payoff per LOC:
 
-1. **Add `snorm`, `half_normal`, `dordlogit` distribution aliases to
+1. **Add `snorm`, `half_normal` distribution aliases to
    `AlistLowering`** — `snorm(...)` → `.normal(...)`; `half_normal(s)`
-   → `.normal(0, s)` with `Truncation(lower: 0)`; `dordlogit` →
-   `.orderedLogistic(eta:, cutpoints:)` paired with auto-synthesised
-   `OrderedCutpoints`. Unblocks alists 3, 6 outright.
-2. **Lift the literal-or-identifier constraint on distribution args**
-   (alist 1) by adding `DistributionArg.expression(String)` and
-   threading verbatim emission through `DistributionCatalog.arg(_:)`.
-   The pattern already exists for `multivariateNormalCholesky` — same
-   shape.
-3. **Add `dmvnorm2` lowering shortcut** that synthesises the
-   companion `dlkjcorr` line (alists 8, 9). Mechanical given the
-   existing `dmvnormchol` infrastructure. Also investigate the
-   spurious truncation on `Rho` (alists 8, 9 generate-stage error).
-4. **Auto-promote indexed-but-otherwise-scalar parameters** (alist 2
-   after typo fix) — when `alpha[county]` appears in a deterministic
-   RHS and `alpha` is declared via a scalar `Prior(...)`, the
-   classifier should promote it to `VaryingPrior(..., indexedBy:
-   "county", ...)` automatically. Or surface a clearer error message
-   pointing at the missing varying declaration.
-5. **`dcategorical` + multi-arg-fn-call parser** (alist 5) and
-   **measurement-error two-role classification** (alist 10 —
-   note: it now passes but produces semantically odd output where
-   `div_obs` is treated as a parameter) are bigger architectural lifts
-   — defer to a separate planning round.
+   → `.normal(0, s)` with `Truncation(lower: 0)`. Unblocks alist 3.
+2. **Investigate the spurious `Rho` truncation in `dlkjcorr` cases**
+   (alists 6, 7) — `lkjCorrCholesky` priors shouldn't go through the
+   σ-slot truncation heuristic. Plus add the **`dmvnorm2` lowering
+   shortcut** that synthesises the companion `dlkjcorr` line.
+3. **Auto-promote indexed-but-otherwise-scalar parameters** (alist 2)
+   — when `alpha[county]` appears in a deterministic RHS and `alpha`
+   is declared via a scalar `Prior(...)`, the classifier should
+   promote it to `VaryingPrior(..., indexedBy: "county", ...)`
+   automatically. Or surface a clearer error pointing at the missing
+   varying declaration.
+4. **Auto-factorise string columns referenced as integer indices**
+   (alist 1 downstream). `csv2json` could detect that a referenced
+   column is meant to be `array[N] int` and assign each unique string
+   value an integer 1..N (rethinking does this). Out of scope today;
+   workaround is to use a pre-computed integer column.
+
+Deferred / out of scope for v1: measurement-error two-role
+classification (alist 8 — currently passes but with semantically odd
+output where `div_obs` is treated as a parameter), nested
+crossed-with-nested combinations.

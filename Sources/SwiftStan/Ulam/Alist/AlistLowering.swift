@@ -230,6 +230,14 @@ internal enum AlistLowering {
   }
 
   /// Curried helper so `dist.args.map(lowerArg(_:in:distName))` works.
+  ///
+  /// 2026-06-08 (TestResults §2): compound expressions in distribution
+  /// arg slots (e.g. `dnorm(alpha[county] + beta*floor, sigma)` —
+  /// alist 1 from the test corpus) now fall through to
+  /// `DistributionArg.expression(...)` instead of throwing
+  /// `unsupportedDistributionArg`. The rendered source comes from
+  /// `AlistEmitter.canonicalExpression(_:)` — the same canonical
+  /// printer used by Link/Deterministic RHSes.
   private static func lowerArg(_ node: ExpressionNode,
                                in distName: String) throws -> DistributionArg {
     switch node {
@@ -237,7 +245,7 @@ internal enum AlistLowering {
     case .literal(.float(let d)):   return .literal(d)
     case .identifier(let name):     return .symbol(name)
     default:
-      throw AlistLoweringError.unsupportedDistributionArg(node, in: distName)
+      return .expression(AlistEmitter.canonicalExpression(node))
     }
   }
 }

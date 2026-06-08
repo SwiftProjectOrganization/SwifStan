@@ -269,43 +269,18 @@ internal enum AlistClassify {
 
   // MARK: - Helpers
 
+  /// 2026-06-08: delegate entirely to
+  /// `DistributionCatalog.symbolsReferenced(_:)`. That helper expands
+  /// `.expression(String)` arguments via the shared identifier
+  /// tokeniser (for compound dist-arg slots like `dnorm(alpha[county]
+  /// + beta*floor, sigma)`), so the alist pipeline's referenced-symbol
+  /// set picks up the embedded identifiers the same way `DataInference`
+  /// does. The pre-2026-06-08 handwritten per-case walk only ran `sym`
+  /// against `.symbol` args and silently dropped `.expression` —
+  /// turning compound mu args into "undeclared symbol" errors at the
+  /// generate stage.
   private static func distributionSymbols(_ d: Distribution) -> [String] {
-    // multivariateNormalCholesky's args are compound source-string
-    // expressions (`[a_bar, b_bar]'`, `diag_pre_multiply(sigma, L)`).
-    // Delegate to the same tokenizer DataInference uses so the alist
-    // pipeline's symbol tracking sees the embedded identifiers (not
-    // the whole source string).
-    if case .multivariateNormalCholesky = d {
-      return DistributionCatalog.symbolsReferenced(d)
-    }
-    func sym(_ a: DistributionArg) -> [String] {
-      if case .symbol(let n) = a { return [n] }
-      return []
-    }
-    switch d {
-    case .normal(let a, let b), .cauchy(let a, let b),
-         .lognormal(let a, let b), .uniform(let a, let b),
-         .beta(let a, let b), .gamma(let a, let b),
-         .multivariateNormal(let a, let b):
-      return sym(a) + sym(b)
-    case .bernoulli(let p), .exponential(let p), .poisson(let p):
-      return sym(p)
-    case .binomial(let n, let p):
-      return sym(n) + sym(p)
-    case .studentT(let nu, let mu, let sigma):
-      return sym(nu) + sym(mu) + sym(sigma)
-    case .lkjCorrCholesky(let eta):
-      return sym(eta)
-    case .multivariateNormalCholesky:
-      return []  // handled above
-    case .wishart(let nu, let V):
-      return sym(nu) + sym(V)
-    case .orderedLogistic(let eta, let cp),
-         .orderedProbit(let eta, let cp):
-      return sym(eta) + sym(cp)
-    case .dirichlet(let alpha):
-      return sym(alpha)
-    }
+    return DistributionCatalog.symbolsReferenced(d)
   }
 
   /// The σ / scale arg for distributions where it makes sense to

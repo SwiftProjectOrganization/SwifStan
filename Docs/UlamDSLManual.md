@@ -778,6 +778,7 @@ Pure metadata — no Stan source emission. Worked example: `V2WorkflowTests.howe
 
 - A numeric literal — `.normal(0, 1.5)` (the `0` and `1.5` are literals).
 - A symbol reference — `.normal("a_bar", "sigma_a")` (the strings name parameters or data columns).
+- A compound expression — `.normal(.expression("alpha[county] + beta*x"), "sigma")` *(2026-06-08)*. Use `.expression(...)` when the arg is more than a single identifier. Renders verbatim into the emitted Stan source; the embedded identifiers (`alpha`, `county`, `beta`, `x`) are tokenised by `symbolsReferenced` and flow into the data / parameter blocks. String-literal init still goes to `.symbol`, so `.normal("a", 1)` keeps its symbol-tracking behaviour — opt into expression semantics explicitly when you need it.
 
 `DistributionArg` conforms to `ExpressibleByIntegerLiteral`, `ExpressibleByFloatLiteral`, and `ExpressibleByStringLiteral`, so call sites read like ordinary Swift code.
 
