@@ -255,6 +255,23 @@ model {
 }
 ```
 
+#### Alist source mapping  *(2026-06-08)*
+
+When sourcing from an `<name>.alist.R` file via `stancode` /
+`alist2dsl`, McElreath's bare-LHS form maps directly onto this node:
+
+```r
+mu <- a + bA*A + bR*R          # bare identifier ⇒ Deterministic
+logit(p) <- a + b*x            # link-wrapped    ⇒ Link(.logit, …)
+log(lambda) <- a + b*log_pop   # link-wrapped    ⇒ Link(.log, …)
+```
+
+The parser dispatches on the LHS shape: a 1-token identifier produces
+`Statement.deterministic(lhs:, rhs:)`; a `<link>(<target>)` shape
+produces `Statement.link(function:, lhs:, rhs:)` with `inv_logit` /
+`exp` wrapping at emission. Indexed bare LHS (`mu[i] <- …`) isn't yet
+accepted — see TODO §2.
+
 ---
 
 ### `Prior`
