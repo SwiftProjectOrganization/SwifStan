@@ -12,7 +12,7 @@ architectural-lift territory) and revising alist 1 to use the explicit
 
 | # | Description | Status (2026-06-08, post `.expression` lift) |
 |---|---|---|
-| 1 | Radon — varying intercept w/ inline `alpha[county]` in `dnorm` mean | ✅ PASS — `stancode` generates the canonical hierarchical Stan source (varying `vector[N_county] alpha;`, `array[N] int<lower=1, upper=N_county> county;`, verbatim sampling line). Downstream `csv2json` against `radon.csv` blocks on the `county` column being a state-name string rather than an integer — orthogonal "auto-factorise string columns referenced as integer indices" feature, not a code-gen issue. |
+| 1 | Radon — varying intercept w/ inline `alpha[county]` in `dnorm` mean | ✅ PASS end-to-end through `csv2json`. `stancode` generates the canonical hierarchical Stan source (varying `vector[N_county] alpha;`, `array[N] int<lower=1, upper=N_county> county;`, verbatim sampling line via `.expression`). `csv2json` auto-factorises the state-name string column into 1..K integers and writes `Results/alist1.factors.json` carrying the level map for post-sample label recovery. Compile + sample steps are mechanical from there. |
 | 2 | Radon (deterministic `mu <-`) | ❌ FAIL — alist file is missing a comma after the `mu <-` line; with that fixed, it parses cleanly and hits the next blocker (indexed `alpha[county]` RHS in a Deterministic line needs `alpha` declared as a `VaryingPrior`). |
 | 3 | UCB binomial with `snorm` / `half_normal` | ❌ FAIL — lower (`snorm` not in V1 catalog). |
 | 4 | Tools / Poisson with grouped prior | ✅ PASS |
@@ -245,11 +245,14 @@ In order of payoff per LOC:
    promote it to `VaryingPrior(..., indexedBy: "county", ...)`
    automatically. Or surface a clearer error pointing at the missing
    varying declaration.
-4. **Auto-factorise string columns referenced as integer indices**
-   (alist 1 downstream). `csv2json` could detect that a referenced
-   column is meant to be `array[N] int` and assign each unique string
-   value an integer 1..N (rethinking does this). Out of scope today;
-   workaround is to use a pre-computed integer column.
+4. ~~**Auto-factorise string columns referenced as integer indices**~~
+   *(done 2026-06-08)* — `csv2json` now classifies each schema-int
+   column: NA always errors; all-integer columns stay verbatim;
+   fully-string columns get factorised (first-seen-gets-1); mixed
+   integer + string throws `Csv2JsonError.mixedTypeIndexColumn`.
+   Factor maps land in `Results/<name>.factors.json` as a clean side
+   artifact joined to `*.samples.csv` / `*.stansummary.csv`. Alist 1
+   from this corpus now runs through the full pipeline.
 
 Deferred / out of scope for v1: measurement-error two-role
 classification (alist 8 — currently passes but with semantically odd

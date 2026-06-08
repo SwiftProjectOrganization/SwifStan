@@ -96,6 +96,116 @@ struct Csv2JsonTests {
     }
   }
 
+  // MARK: - String-column auto-factorisation (2026-06-08)
+
+  /// A schema-int column whose CSV values are all non-NA strings
+  /// (e.g. `"AITKIN", "ANOKA", …`) should be auto-factorised:
+  /// first-seen string gets 1, second unique gets 2, etc. The
+  /// resulting `data.json` carries the integer values; a side-file
+  /// `Results/<name>.factors.json` carries the `level → int` map.
+  @Test func stringIndexColumnIsAutoFactorised() throws {
+    let model = "csv2json_factor_fixture"
+    let stanSource = """
+    data {
+      int<lower=1> N;
+      int<lower=1> N_county;
+      array[N] int<lower=1, upper=N_county> county;
+      vector[N] x;
+    }
+    """
+    let csv = """
+    county,x
+    AITKIN,0.1
+    ANOKA,0.2
+    AITKIN,0.3
+    BLAINE,0.4
+    ANOKA,0.5
+    """
+    try Self.installSyntheticModel(name: model,
+                                   stanSource: stanSource,
+                                   csvContent: csv)
+    defer { Self.removeSyntheticModel(name: model) }
+
+    let dataURL = try csv2json(model: model)
+    let dataJSON = try JSONSerialization.jsonObject(
+      with: try Data(contentsOf: dataURL)) as? [String: Any]
+    let payload = try #require(dataJSON)
+    // Integer-coded county column: AITKIN→1, ANOKA→2, BLAINE→3.
+    #expect(payload["county"] as? [Int] == [1, 2, 1, 3, 2])
+    // Cardinality derives via the existing max(values) path.
+    #expect(payload["N_county"] as? Int == 3)
+    #expect(payload["N"] as? Int == 5)
+
+    // factors.json captures the level → int map.
+    let factorsURL = casePaths(for: model)
+      .results.appendingPathComponent("\(model).factors.json")
+    #expect(FileManager.default.fileExists(atPath: factorsURL.path))
+    let factorsJSON = try JSONSerialization.jsonObject(
+      with: try Data(contentsOf: factorsURL)) as? [String: [String: Int]]
+    let factors = try #require(factorsJSON?["county"])
+    #expect(factors == ["AITKIN": 1, "ANOKA": 2, "BLAINE": 3])
+  }
+
+  /// Mixed-shape columns (some integer-valued rows, some string-valued)
+  /// throw `mixedTypeIndexColumn` pointing at the integer-shaped row
+  /// that broke the otherwise-string column. Genuine data bugs
+  /// surface; we don't silently factorise.
+  @Test func mixedIntStringIndexColumnIsRejected() throws {
+    let model = "csv2json_mixed_fixture"
+    let stanSource = """
+    data {
+      int<lower=1> N;
+      int<lower=1> N_group;
+      array[N] int<lower=1, upper=N_group> group;
+    }
+    """
+    let csv = """
+    group
+    AITKIN
+    ANOKA
+    7
+    BLAINE
+    """
+    try Self.installSyntheticModel(name: model,
+                                   stanSource: stanSource,
+                                   csvContent: csv)
+    defer { Self.removeSyntheticModel(name: model) }
+
+    #expect(throws: Csv2JsonError.self) {
+      _ = try csv2json(model: model)
+    }
+  }
+
+  /// All-integer index column stays untouched: no factorisation,
+  /// no side-file written. Regression guard for the happy path.
+  @Test func integerIndexColumnLeavesFactorsSideFileAbsent() throws {
+    let model = "csv2json_no_factors_fixture"
+    let stanSource = """
+    data {
+      int<lower=1> N;
+      int<lower=1> N_group;
+      array[N] int<lower=1, upper=N_group> group;
+      vector[N] x;
+    }
+    """
+    let csv = """
+    group,x
+    1,0.1
+    2,0.2
+    1,0.3
+    """
+    try Self.installSyntheticModel(name: model,
+                                   stanSource: stanSource,
+                                   csvContent: csv)
+    defer { Self.removeSyntheticModel(name: model) }
+
+    _ = try csv2json(model: model)
+    let factorsURL = casePaths(for: model)
+      .results.appendingPathComponent("\(model).factors.json")
+    #expect(!FileManager.default.fileExists(atPath: factorsURL.path),
+            "factors.json should NOT be written when no column was factorised")
+  }
+
   // MARK: - Fixtures
 
   /// Tiny two-column Stan source the synthetic tests validate against.

@@ -24,6 +24,7 @@ public enum Csv2JsonError: Error, CustomStringConvertible {
   case naValue(column: String, row: Int, value: String)
   case nonInteger(column: String, row: Int, value: String)
   case nonReal(column: String, row: Int, value: String)
+  case mixedTypeIndexColumn(column: String, row: Int, value: String)
   case schemaError(StanSchemaParseError)
 
   public var description: String {
@@ -40,6 +41,8 @@ public enum Csv2JsonError: Error, CustomStringConvertible {
       return "csv2json: non-integer value '\(value)' in column '\(column)' at row \(row)"
     case .nonReal(let column, let row, let value):
       return "csv2json: non-numeric value '\(value)' in column '\(column)' at row \(row)"
+    case .mixedTypeIndexColumn(let column, let row, let value):
+      return "csv2json: column '\(column)' has both string-valued rows and integer-valued ones (row \(row) = '\(value)'); auto-factorisation only fires when every value is a string"
     case .schemaError(let err):
       return "csv2json: \(err.description)"
     }
@@ -76,6 +79,12 @@ public func csv2json(model: String, verbose: Bool = false) throws -> URL {
   }
 
   var output: [String: Any] = [:]
+  /// 2026-06-08: any integer column that got auto-factorised from
+  /// strings deposits its `level → 1-based int` map here. Written to
+  /// `Results/<name>.factors.json` as a post-processed side artifact
+  /// so analysts can recover the original string labels for plotting
+  /// / interpretation.
+  var factorMaps: [String: [String: Int]] = [:]
 
   // Required row-data columns must exist in the CSV.
   for decl in schema.declarations {
@@ -88,13 +97,20 @@ public func csv2json(model: String, verbose: Bool = false) throws -> URL {
         // fix the schema or rename.
         throw Csv2JsonError.schemaColumnMissing(column: col, csvPath: csvURL.path)
       }
-      let ints = try parseIntColumn(column, columnName: col)
+      // `parseIntColumn` is deterministic on the same input array, so
+      // calling it twice (once here, once in the .rowInt arm) produces
+      // identical maps. The .rowInt arm is where the factor map is
+      // captured — this arm only needs the integer values for the
+      // `max(...)` cardinality derivation.
+      let (ints, _) = try parseIntColumn(column, columnName: col)
       output[decl.name] = ints.max() ?? 0
     case .rowInt:
       guard let column = parsed.column(named: decl.name) else {
         throw Csv2JsonError.schemaColumnMissing(column: decl.name, csvPath: csvURL.path)
       }
-      output[decl.name] = try parseIntColumn(column, columnName: decl.name)
+      let (ints, factors) = try parseIntColumn(column, columnName: decl.name)
+      output[decl.name] = ints
+      if let factors { factorMaps[decl.name] = factors }
     case .rowReal:
       guard let column = parsed.column(named: decl.name) else {
         throw Csv2JsonError.schemaColumnMissing(column: decl.name, csvPath: csvURL.path)
@@ -109,6 +125,20 @@ public func csv2json(model: String, verbose: Bool = false) throws -> URL {
   let json = try JSONSerialization.data(withJSONObject: output, options: [.prettyPrinted, .sortedKeys])
   try json.write(to: outURL, options: .atomic)
   if verbose { print("csv2json: wrote \(outURL.path)") }
+
+  // Side-file: persist factor maps only when at least one column was
+  // factorised. Keeps the Results/ dir clean for purely-numeric inputs.
+  if !factorMaps.isEmpty {
+    let factorsURL = paths.results.appendingPathComponent("\(model).factors.json")
+    let factorsJSON = try JSONSerialization.data(
+      withJSONObject: factorMaps,
+      options: [.prettyPrinted, .sortedKeys])
+    try factorsJSON.write(to: factorsURL, options: .atomic)
+    if verbose {
+      let cols = factorMaps.keys.sorted().joined(separator: ", ")
+      print("csv2json: auto-factorised string columns [\(cols)] → \(factorsURL.lastPathComponent)")
+    }
+  }
   return outURL
 }
 
@@ -148,19 +178,59 @@ private func parseCsv(_ raw: String) -> ParsedCsv {
 
 private let naTokens: Set<String> = ["NA", "na", "N/A", "n/a", "NaN", "nan", ""]
 
-private func parseIntColumn(_ values: [String], columnName: String) throws -> [Int] {
-  var out: [Int] = []
-  out.reserveCapacity(values.count)
+/// 2026-06-08: returns the integer values plus an optional factor map
+/// (level → 1-based int) when the column was auto-factorised from
+/// strings (cf. McElreath's `rethinking::coerce_index`).
+///
+/// Behaviour:
+/// - NA-like values always throw `naValue` (first occurrence).
+/// - Fully-integer column → integers verbatim, factors = nil.
+/// - Fully-string column with no NAs → factorise (first-seen-gets-1).
+/// - Mixed integer + string (at least one of each) → throw
+///   `mixedTypeIndexColumn` pointing at the integer-shaped row that
+///   broke the otherwise-string column. Genuine data bugs surface
+///   instead of silently factorising.
+private func parseIntColumn(_ values: [String],
+                            columnName: String)
+    throws -> (ints: [Int], factors: [String: Int]?) {
+  // Phase 1: NA detection. Always an error — McElreath's coerce_index
+  // doesn't silently bucket NAs either.
   for (i, v) in values.enumerated() {
     if naTokens.contains(v) {
       throw Csv2JsonError.naValue(column: columnName, row: i + 1, value: v)
     }
-    guard let parsed = Int(v) else {
-      throw Csv2JsonError.nonInteger(column: columnName, row: i + 1, value: v)
-    }
-    out.append(parsed)
   }
-  return out
+  // Phase 2: try parsing all as Int. Happy path for genuinely integer
+  // columns — no factor map.
+  let parsedInts = values.map { Int($0) }
+  if parsedInts.allSatisfy({ $0 != nil }) {
+    return (parsedInts.map { $0! }, nil)
+  }
+  // Phase 3: mixed-shape detection. At least one value is non-Int (we
+  // just left the all-Int happy path); if any value IS Int, the column
+  // is structurally ambiguous — surface the integer-looking row that
+  // broke the otherwise-string column.
+  for (i, v) in values.enumerated() where Int(v) != nil {
+    throw Csv2JsonError.mixedTypeIndexColumn(
+      column: columnName, row: i + 1, value: v)
+  }
+  // Phase 4: fully string-valued — auto-factorise. First-seen-gets-1
+  // preserves the natural CSV row order, so `factors.json` reads in
+  // discovery order.
+  var seen: [String: Int] = [:]
+  var ints: [Int] = []
+  ints.reserveCapacity(values.count)
+  var nextId = 1
+  for v in values {
+    if let id = seen[v] {
+      ints.append(id)
+    } else {
+      seen[v] = nextId
+      ints.append(nextId)
+      nextId += 1
+    }
+  }
+  return (ints, seen)
 }
 
 private func parseRealColumn(_ values: [String], columnName: String) throws -> [Double] {
