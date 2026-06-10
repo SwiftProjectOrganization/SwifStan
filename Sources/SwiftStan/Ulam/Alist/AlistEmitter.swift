@@ -89,7 +89,7 @@ internal struct AlistEmitter {
       line(col, "integer")
     }
     for col in classified.dataColumns where !emitted.contains(col) {
-      line(col, "real")
+      line(col, columnKind(name: col))
     }
     s += "    ]\n"
   }
@@ -131,7 +131,8 @@ internal struct AlistEmitter {
         s += "      Deterministic(\"\(stmt.name)\", \"\(renderLinkRhs(stmt.linkRhs!))\")\n"
       case .scalarPrior:
         let trunc = renderTruncation(stmt.truncation)
-        s += "      Prior(\"\(stmt.name)\", \(renderDist(stmt.dist!))\(trunc))\n"
+        let constr = renderConstraints(stmt.constraints)
+        s += "      Prior(\"\(stmt.name)\", \(renderDist(stmt.dist!))\(trunc)\(constr))\n"
       case .varyingPrior(let indexedBy):
         let trunc = renderTruncation(stmt.truncation)
         s += "      VaryingPrior(\"\(stmt.name)\", indexedBy: \"\(indexedBy)\", \(renderDist(stmt.dist!))\(trunc))\n"
@@ -218,6 +219,14 @@ internal struct AlistEmitter {
     if let lo = t.lower { inner.append("lower: \(renderArg(lo))") }
     if let hi = t.upper { inner.append("upper: \(renderArg(hi))") }
     return ", truncation: Truncation(\(inner.joined(separator: ", ")))"
+  }
+
+  private func renderConstraints(_ c: Constraints) -> String {
+    if c.isEmpty { return "" }
+    var inner: [String] = []
+    if let lo = c.lower { inner.append("lower: \(renderArg(lo))") }
+    if let hi = c.upper { inner.append("upper: \(renderArg(hi))") }
+    return ", constraints: Constraints(\(inner.joined(separator: ", ")))"
   }
 
   private func renderLinkRhs(_ node: ExpressionNode) -> String {

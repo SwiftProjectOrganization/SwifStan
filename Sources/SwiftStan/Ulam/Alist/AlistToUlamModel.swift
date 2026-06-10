@@ -44,7 +44,7 @@ internal enum AlistToUlamModel {
       emitted.insert(col)
     }
     for col in classified.dataColumns where !emitted.contains(col) {
-      out[col] = .real([0.0])
+      out[col] = stubColumn(for: col, in: classified)
       emitted.insert(col)
     }
     return out
@@ -75,7 +75,7 @@ internal enum AlistToUlamModel {
         out.append(.prior(name: stmt.name,
                           distribution: stmt.dist!,
                           truncation: stmt.truncation,
-                          constraints: .none,
+                          constraints: stmt.constraints,
                           start: nil,
                           useLpdf: false))
       case .varyingPrior(let idx):

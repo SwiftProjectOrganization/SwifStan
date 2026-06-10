@@ -55,7 +55,25 @@ internal struct ClassifiedAlist: Equatable {
     internal let name: String          // outcome / param / link target
     internal let dist: Distribution?   // nil for links
     internal let truncation: Truncation
+    /// Declaration-only `<lower, upper>` constraints inferred from a
+    /// bounded-support prior (e.g. `dbeta` → (0, 1)). Distinct from
+    /// `truncation`: this never emits a sampling-line `T[…]` suffix.
+    internal let constraints: Constraints
     internal let linkRhs: ExpressionNode?  // non-nil only for links
+
+    internal init(kind: Kind,
+                  name: String,
+                  dist: Distribution?,
+                  truncation: Truncation,
+                  constraints: Constraints = .none,
+                  linkRhs: ExpressionNode?) {
+      self.kind = kind
+      self.name = name
+      self.dist = dist
+      self.truncation = truncation
+      self.constraints = constraints
+      self.linkRhs = linkRhs
+    }
   }
 
   internal let statements: [Statement]
@@ -238,18 +256,29 @@ internal enum AlistClassify {
       }
     }
     let adjusted = statements.map { s -> ClassifiedAlist.Statement in
-      let promotable: Bool = {
+      let isScalarPrior: Bool = {
         if case .scalarPrior = s.kind { return true }
+        return false
+      }()
+      let promotable: Bool = isScalarPrior || {
         if case .vectorPrior = s.kind { return true }
         return false
       }()
-      if promotable, halfPositive.contains(s.name) {
-        // Merge `lower: 0` into the parameter's existing truncation.
-        let trunc = mergeLowerZero(s.truncation)
+      // Slice D: merge `lower: 0` into a σ-scale parameter's truncation.
+      let trunc = (promotable && halfPositive.contains(s.name))
+        ? mergeLowerZero(s.truncation)
+        : s.truncation
+      // Natural-support inference: a scalar parameter with a
+      // bounded-support prior (e.g. `dbeta` on (0, 1)) gets the matching
+      // declaration constraint. Uses `Constraints` (declaration-only) so
+      // no redundant `T[…]` suffix lands on the sampling statement.
+      let constraints = isScalarPrior ? naturalSupportConstraints(s.dist) : .none
+      if trunc != s.truncation || !constraints.isEmpty {
         return .init(kind: s.kind,
                      name: s.name,
                      dist: s.dist,
                      truncation: trunc,
+                     constraints: constraints,
                      linkRhs: s.linkRhs)
       }
       return s
@@ -299,6 +328,23 @@ internal enum AlistClassify {
     }
   }
 
+  /// Declaration constraints implied by a prior's natural support.
+  /// `dbeta` is bounded to (0, 1); `dunif(a, b)` to its own (a, b) — a
+  /// uniform prior is improper unless the parameter is declared on the
+  /// same interval. Other distributions add nothing here (scale
+  /// positivity is handled separately via Slice D truncation).
+  private static func naturalSupportConstraints(_ d: Distribution?) -> Constraints {
+    guard let d else { return .none }
+    switch d {
+    case .beta:
+      return Constraints(lower: 0, upper: 1)
+    case .uniform(let lower, let upper):
+      return Constraints(lower: lower, upper: upper)
+    default:
+      return .none
+    }
+  }
+
   private static func mergeLowerZero(_ trunc: Truncation) -> Truncation {
     if trunc.lower != nil { return trunc }
     return Truncation(lower: 0, upper: trunc.upper)
@@ -335,7 +381,22 @@ extension ClassifiedAlist {
        Self.isIntegerOutcome(dist) {
       return .integer
     }
+    // Stan requires the binomial trials count to be an integer array
+    // (`binomial(trials, theta)` rejects a `vector[N] trials`). A data
+    // column that fills the `n` slot of any binomial is therefore typed
+    // as integer, mirroring the outcome heuristic above.
+    if isBinomialTrialsCount(column) { return .integer }
     return .real
+  }
+
+  /// True when `column` appears (as a bare symbol) in the trials slot
+  /// of any binomial distribution in the model.
+  private func isBinomialTrialsCount(_ column: String) -> Bool {
+    for stmt in statements {
+      guard case .binomial(let n, _)? = stmt.dist else { continue }
+      if case .symbol(let s) = n, s == column { return true }
+    }
+    return false
   }
 
   private static func isIntegerOutcome(_ d: Distribution) -> Bool {

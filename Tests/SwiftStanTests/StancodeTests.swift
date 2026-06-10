@@ -54,6 +54,79 @@ struct StancodeTests {
             "stancode fast-path output diverged from in-process bernoulli golden")
   }
 
+  static let binomialAlist = """
+    ucbadmit_demo <- ulam(
+        alist(
+            admit ~ dbinom( applications , p ),
+            logit(p) <- a,
+            a ~ dnorm( 0 , 1.5 )
+        ),
+        data=d )
+    """
+
+  @Test func binomialTrialsAreIntegerArray() throws {
+    let model = "stancode_binomial_fixture"
+    let paths = casePaths(for: model)
+    try ensureCaseDirectories(paths)
+    defer { try? FileManager.default.removeItem(at: caseRoot().appendingPathComponent(model)) }
+
+    try Self.binomialAlist.write(
+      to: paths.preliminaries.appendingPathComponent("\(model).alist.R"),
+      atomically: true, encoding: .utf8)
+
+    let stanURL = try stancode(model: model)
+    let emitted = try String(contentsOf: stanURL, encoding: .utf8)
+    // Stan rejects `binomial(applications, p)` unless `applications` is an
+    // integer array. The trials column must be declared `array[N] int`,
+    // never `vector[N]`.
+    #expect(emitted.contains("array[N] int") && emitted.contains("applications"),
+            "binomial trials column not declared as an integer array:\n\(emitted)")
+    #expect(!emitted.contains("vector[N] applications"),
+            "binomial trials column wrongly declared as a real vector:\n\(emitted)")
+  }
+
+  static let uniformPriorAlist = """
+    alist(
+      y ~ dbern(theta),
+      theta ~ dunif(0, 1)
+    )
+    """
+
+  static let betaPriorAlist = """
+    alist(
+      y ~ dbern(theta),
+      theta ~ dbeta(1, 1)
+    )
+    """
+
+  @Test(arguments: [
+    ("stancode_unif_fixture", StancodeTests.uniformPriorAlist),
+    ("stancode_beta_fixture", StancodeTests.betaPriorAlist),
+  ])
+  func boundedSupportPriorConstrainsParameter(model: String, alist: String) throws {
+    let paths = casePaths(for: model)
+    try ensureCaseDirectories(paths)
+    defer { try? FileManager.default.removeItem(at: caseRoot().appendingPathComponent(model)) }
+
+    try alist.write(
+      to: paths.preliminaries.appendingPathComponent("\(model).alist.R"),
+      atomically: true, encoding: .utf8)
+
+    let stanURL = try stancode(model: model)
+    let emitted = try String(contentsOf: stanURL, encoding: .utf8)
+    // A `dunif(0, 1)` / `dbeta(1, 1)` prior has support on [0, 1], so the
+    // parameter must be declared with matching bounds — otherwise Stan
+    // samples on an unbounded scale and the prior is improper.
+    #expect(emitted.contains("real<lower=0, upper=1> theta;"),
+            "bounded-support prior did not constrain its parameter:\n\(emitted)")
+    #expect(!emitted.contains("real theta;"),
+            "parameter wrongly declared without constraints:\n\(emitted)")
+    // The bound is declaration-only (`Constraints`, not `Truncation`):
+    // no redundant `T[…]` suffix on the sampling statement.
+    #expect(!emitted.contains("T["),
+            "bounded-support prior emitted a redundant T[…] sampling suffix:\n\(emitted)")
+  }
+
   @Test func matchesDsl2StanByteForByte() throws {
     let fastModel = "stancode_fast_fixture"
     let slowModel = "stancode_slow_fixture"
