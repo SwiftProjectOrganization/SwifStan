@@ -58,7 +58,7 @@ to cmdstan's `make` to translate the Stan source to C++ and build a native binar
 
 ## 3. Simple Ulam models
 
-### 3.1 Radon example
+### 3.1 Radon complete-pooling example
 
 #### 3.1.1 About the radon example
 
