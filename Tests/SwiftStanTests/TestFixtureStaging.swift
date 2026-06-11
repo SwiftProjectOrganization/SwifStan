@@ -2,7 +2,7 @@
 //  TestFixtureStaging.swift
 //  SwiftStanTests
 //
-//  Shared helper for staging bundled `Tests/SwiftStanTests/TestDataFiles/`
+//  Shared helper for staging bundled `Tests/TestDataFiles/`
 //  fixtures into per-model case dirs under `~/Documents/<STAN_CASES>/`.
 //  Used by tests that depend on the canonical chimpanzees / howell
 //  inputs and otherwise fail when run from a clean checkout (empty
@@ -17,7 +17,7 @@ enum TestFixtureStagingError: Error, CustomStringConvertible {
   var description: String {
     switch self {
     case .bundledFixtureMissing(let name):
-      return "bundled fixture `\(name)` missing — check Tests/SwiftStanTests/TestDataFiles/ and Package.swift `resources:`"
+      return "bundled fixture `\(name)` missing — check Tests/TestDataFiles/ and Package.swift `resources:`"
     }
   }
 }

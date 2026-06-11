@@ -20,6 +20,7 @@ let package = Package(
         .testTarget(
             name: "SwiftStanTests",
             dependencies: ["SwiftStan"],
+            path: "Tests",
             resources: [.copy("TestDataFiles")]
         ),
     ]

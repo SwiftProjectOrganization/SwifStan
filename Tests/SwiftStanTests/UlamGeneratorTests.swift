@@ -1941,7 +1941,7 @@ struct UlamArtifactEmissionTests {
   /// the full ulam pipeline. Skips with a clear message if the upstream
   /// CSV isn't present on the developer's machine.
   @Test func chimpanzeesArtifactsEmitted() throws {
-    // Uses the bundled `Tests/SwiftStanTests/TestDataFiles/chimpanzees.csv`
+    // Uses the bundled `Tests/TestDataFiles/chimpanzees.csv`
     // fixture (comma-delimited, `block` already renamed to `block_id`, no
     // `recipient` column) so the test runs from a clean checkout without
     // depending on a developer-local data directory.
@@ -1994,7 +1994,7 @@ struct UlamArtifactEmissionTests {
   /// standardisation cmdstan's R-hat can creep above 1.05 on the
   /// intercept row of `beta`.
   @Test func surArtifactsEmitted() throws {
-    // Uses the bundled `Tests/SwiftStanTests/TestDataFiles/WaffleDivorce.csv`
+    // Uses the bundled `Tests/TestDataFiles/WaffleDivorce.csv`
     // fixture (semicolon-delimited) so the test runs from a clean checkout
     // without depending on a developer-local data directory.
     let csvURL = try #require(
