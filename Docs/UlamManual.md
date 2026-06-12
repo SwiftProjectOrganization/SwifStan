@@ -54,6 +54,24 @@ The two subcommands used in this chapter:
 `stancode` runs entirely in-process (no `swiftc`, no cmdstan). `compile` shells out
 to cmdstan's `make` to translate the Stan source to C++ and build a native binary.
 
+### Reverse direction: `stan2alist`
+
+`swiftstan stan2alist --model <name>` is the inverse of `stancode`: it reads
+`Results/<name>.stan` and writes a McElreath `alist()` to
+`Preliminaries/<name>.alist.R`. It also runs in-process. Use it to recover an
+editable `alist()` from a hand-written or generated Stan file.
+
+It targets the round-trip / idiomatic-McElreath Stan subset. Declaration
+constraints (`<lower=0>`), half-Cauchy `T[0, ]` suffixes, and `<offset>`/
+`<multiplier>` affine non-centering are dropped on the way back — they are
+re-derived (or are semantically equivalent to the centred form) when
+`stancode` regenerates the Stan, so `stancode → stan2alist → stancode`
+round-trips byte-for-byte for vectorising models. `generated quantities` and
+`transformed *` blocks have no `alist()` form and are dropped with a warning;
+`for`/`while` loops (non-vectorisable indexed linear models) and multivariate
+distributions are out of scope and fail loud. It refuses to overwrite an
+existing `.alist.R` unless `--force` is given.
+
 ---
 
 ## 3. Simple examples
