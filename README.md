@@ -6,8 +6,8 @@
 
 Documentation lives in [`Docs/`](Docs/):
 
-- [`Docs/README.md`](Docs/README.md) — overview, supported functionality, setup, usage, help screens, and the Ulam DSL.
-- [`Docs/UlamManual.md`](Docs/UlamManual.md) — Ulam manual using `stancode`.
-- [`Docs/DSLManual.md`](Docs/DSLManual.md) — Ulam manual via the DSL pipeline (`alist2dsl` → `dsl2stan`).
-- [`Docs/TODO.md`](Docs/TODO.md) — forward-looking punch list for topics implemented and possible future work/refinements to do.[](()
+- [`Docs/README.md`](Docs/README.md) — overview, supported functionality, setup, usage, help screens, and the ulam DSL.
+- [`Docs/UlamManual.md`](Docs/UlamManual.md) — ulam manual using `stancode`.
+- [`Docs/DSLManual.md`](Docs/DSLManual.md) — ulam manual via the Swift/DSL pipeline (`alist2dsl` → `dsl2stan`).
+- [`Docs/TODO.md`](Docs/TODO.md) — forward-looking list of possible future work/refinements to do.[](()
 - [`Docs/CLAUDE.md`](Docs/CLAUDE.md) — architecture notes (loaded by Claude Code sessions in this workspace).
