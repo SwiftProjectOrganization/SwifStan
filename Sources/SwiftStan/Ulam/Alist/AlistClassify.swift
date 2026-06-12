@@ -274,15 +274,22 @@ internal enum AlistClassify {
         if case .vectorPrior = s.kind { return true }
         return false
       }()
-      // Slice D: merge `lower: 0` into a σ-scale parameter's truncation.
-      let trunc = (promotable && halfPositive.contains(s.name))
-        ? mergeLowerZero(s.truncation)
-        : s.truncation
       // Natural-support inference: a scalar parameter with a
       // bounded-support prior (e.g. `dbeta` on (0, 1)) gets the matching
       // declaration constraint. Uses `Constraints` (declaration-only) so
       // no redundant `T[…]` suffix lands on the sampling statement.
       let constraints = isScalarPrior ? naturalSupportConstraints(s.dist) : .none
+      // Slice D: merge `lower: 0` into a σ-scale parameter's truncation —
+      // but only when the prior didn't already impose declaration
+      // constraints. A parameter that both sits in a normal's σ-slot and
+      // carries a bounded-support prior (e.g. `sigma ~ dunif(0, 50)` in
+      // McElreath's Howell m4.1) would otherwise get BOTH `truncation:`
+      // and `constraints:` set, which the generator rejects. The
+      // constraint's lower bound already subsumes the scale-positivity
+      // truncation, so the redundant truncation is dropped.
+      let trunc = (promotable && halfPositive.contains(s.name) && constraints.isEmpty)
+        ? mergeLowerZero(s.truncation)
+        : s.truncation
       if trunc != s.truncation || !constraints.isEmpty {
         return .init(kind: s.kind,
                      name: s.name,
