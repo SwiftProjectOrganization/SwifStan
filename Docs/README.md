@@ -39,6 +39,7 @@ This project is work in progress!!! Work completed or still to be done can be fo
 | ------------ | -------------------------------------- |
 | ulam         | Run the ulam pipeline end-to-end       |
 | stancode     | alist -> .stan                         |
+| stan2alist   | .stan -> alist (inverse of stancode)   |
 | alist2dsl    | alist -> smoke driver                  |
 | dsl2stan     | smake driver -> .stan                  |
 | ------------ | -------------------------------------- |
@@ -228,6 +229,7 @@ SUBCOMMANDS:
   dsl2stan                  Compile a Preliminaries/*.ulam.swift, write Results/<name>.stan.
   alist2dsl                 Translate Preliminaries/<name>.alist.R into  Preliminaries/<Name>.ulam.swift.
   stancode                  Translate Preliminaries/<name>.alist.R straight to Results/<name>.stan (in-process, no swiftc).
+  stan2alist                Reverse-translate Results/<name>.stan into Preliminaries/<name>.alist.R (inverse of stancode).
   runinfo                   Read Results/<name>_output_config.json and write a cleaned Results/<name>.runinfo.json.
   ulam                      Run one of the built-in ulam DSL demos (--model Bernoulli|Poisson|Binomial|UCB|Dmvnorm).
   test (default)            Test the CLI functions.

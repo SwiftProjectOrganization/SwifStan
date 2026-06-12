@@ -286,3 +286,109 @@ enum DistributionCatalog {
     }
   }
 }
+
+// MARK: - Reverse catalog (stan2alist, Slice A)
+//
+// The `stan2alist` command needs the inverse of `name(_:)` / `args(_:)`:
+// given a Stan distribution name and its argument source strings,
+// rebuild the canonical `Distribution`, and given a `Distribution`,
+// render McElreath's R name (`dnorm`, `dbinom`, …) for the emitted
+// `alist()`. Kept here so the forward and reverse tables stay adjacent
+// and can't drift — change one, change the other.
+
+extension DistributionCatalog {
+
+  enum ReverseError: Error, CustomStringConvertible {
+    /// A Stan distribution name with no in-scope `Distribution` mapping
+    /// (e.g. a multivariate, which v1 of stan2alist rejects).
+    case unsupportedDistribution(String)
+    /// The arg count didn't match the named distribution's arity.
+    case arityMismatch(name: String, expected: Int, got: Int)
+
+    var description: String {
+      switch self {
+      case .unsupportedDistribution(let n):
+        return "stan2alist: distribution '\(n)' is not supported (v1 handles univariate distributions only)"
+      case .arityMismatch(let n, let expected, let got):
+        return "stan2alist: distribution '\(n)' expects \(expected) argument(s), got \(got)"
+      }
+    }
+  }
+
+  /// McElreath's `rethinking` R name for a `Distribution`. Inverse of
+  /// `name(_:)` but to the R DSL rather than Stan. The multivariate
+  /// rows are best-effort — v1 stan2alist rejects them upstream, so they
+  /// exist only to keep the switch exhaustive.
+  static func mcElreathName(_ distribution: Distribution) -> String {
+    switch distribution {
+    case .normal:                     return "dnorm"
+    case .bernoulli:                  return "dbinom"   // dbinom(1, p) — trials supplied on emit
+    case .binomial:                   return "dbinom"
+    case .beta:                       return "dbeta"
+    case .exponential:                return "dexp"
+    case .poisson:                    return "dpois"
+    case .gamma:                      return "dgamma"
+    case .cauchy:                     return "dcauchy"
+    case .lognormal:                  return "dlnorm"
+    case .uniform:                    return "dunif"
+    case .studentT:                   return "dstudent"
+    case .multivariateNormal:         return "dmvnorm"
+    case .lkjCorrCholesky:            return "dlkjcorr"
+    case .multivariateNormalCholesky: return "dmvnorm"
+    case .wishart:                    return "dwishart"
+    case .orderedLogistic:            return "dordlogit"
+    case .orderedProbit:              return "dordlogit"
+    case .dirichlet:                  return "ddirichlet"
+    }
+  }
+
+  /// Classify a single Stan argument source string into a
+  /// `DistributionArg`. A bare numeric literal becomes `.literal`; a
+  /// bare identifier becomes `.symbol`; anything compound (indexing,
+  /// arithmetic) becomes `.expression`, mirroring how `arg(_:)` renders
+  /// all three identically.
+  static func distributionArg(from source: String) -> DistributionArg {
+    let trimmed = source.trimmingCharacters(in: .whitespaces)
+    if let d = Double(trimmed) {
+      return .literal(d)
+    }
+    if isSimpleIdentifier(trimmed) {
+      return .symbol(trimmed)
+    }
+    return .expression(trimmed)
+  }
+
+  private static func isSimpleIdentifier(_ s: String) -> Bool {
+    guard let first = s.first, first == "_" || first.isLetter else { return false }
+    return s.dropFirst().allSatisfy { $0 == "_" || $0.isLetter || $0.isNumber }
+  }
+
+  /// Reconstruct a `Distribution` from a Stan distribution name and its
+  /// argument source strings. Inverse of `name(_:)` + `args(_:)`. Throws
+  /// `ReverseError` for unsupported (multivariate) distributions or an
+  /// argument-count mismatch.
+  static func distribution(fromStanName name: String,
+                           args rawArgs: [String]) throws -> Distribution {
+    let a = rawArgs.map(distributionArg(from:))
+    func require(_ n: Int) throws {
+      guard a.count == n else {
+        throw ReverseError.arityMismatch(name: name, expected: n, got: a.count)
+      }
+    }
+    switch name {
+    case "normal":      try require(2); return .normal(a[0], a[1])
+    case "bernoulli":   try require(1); return .bernoulli(p: a[0])
+    case "binomial":    try require(2); return .binomial(n: a[0], p: a[1])
+    case "beta":        try require(2); return .beta(a[0], a[1])
+    case "exponential": try require(1); return .exponential(a[0])
+    case "poisson":     try require(1); return .poisson(a[0])
+    case "gamma":       try require(2); return .gamma(a[0], a[1])
+    case "cauchy":      try require(2); return .cauchy(a[0], a[1])
+    case "lognormal":   try require(2); return .lognormal(a[0], a[1])
+    case "uniform":     try require(2); return .uniform(lower: a[0], upper: a[1])
+    case "student_t":   try require(3); return .studentT(nu: a[0], mu: a[1], sigma: a[2])
+    default:
+      throw ReverseError.unsupportedDistribution(name)
+    }
+  }
+}

@@ -22,7 +22,7 @@ struct SwiftStan: ParsableCommand {
     // Pass an array to `subcommands` to set up a nested tree of subcommands.
     // With language support for type-level introspection, this could be
     // provided by automatically finding nested `ParsableCommand` types.
-    subcommands: [Compile.self, Sample.self, Optimize.self, Pathfinder.self, Laplace.self, Stansummary.self, Csv2Json.self, Dsl2Stan.self, Alist2Dsl.self, Stancode.self, Runinfo.self, Ulam.self, Test.self],
+    subcommands: [Compile.self, Sample.self, Optimize.self, Pathfinder.self, Laplace.self, Stansummary.self, Csv2Json.self, Dsl2Stan.self, Alist2Dsl.self, Stancode.self, Stan2Alist.self, Runinfo.self, Ulam.self, Test.self],
     
     // A default subcommand, when provided, is automatically selected if a
     // subcommand is not given on the command line.
@@ -354,6 +354,30 @@ extension SwiftStan {
       let model = options.model ?? "bernoulli"
       do {
         let url = try stancode(model: model, verbose: options.verbose)
+        printFinalResult(("Wrote \(url.path)", ""))
+      } catch {
+        printFinalResult(("", "\(error)"))
+      }
+    }
+  }
+}
+
+extension SwiftStan {
+  struct Stan2Alist: ParsableCommand {
+    static let configuration = CommandConfiguration(
+      commandName: "stan2alist",
+      abstract: "Reverse-translate Results/<name>.stan into Preliminaries/<name>.alist.R (inverse of stancode).")
+
+    @OptionGroup var options: OptionsLimited
+
+    @Flag(name: [.customLong("force"), .customShort("f")],
+          help: "Overwrite an existing Preliminaries/<name>.alist.R.")
+    var force: Bool = false
+
+    mutating func run() {
+      let model = options.model ?? "bernoulli"
+      do {
+        let url = try stan2alist(model: model, verbose: options.verbose, force: force)
         printFinalResult(("Wrote \(url.path)", ""))
       } catch {
         printFinalResult(("", "\(error)"))
