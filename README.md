@@ -11,3 +11,5 @@ Documentation lives in [`Docs/`](Docs/):
 - [`Docs/DSLManual.md`](Docs/DSLManual.md) — ulam manual via the Swift/DSL pipeline (`alist2dsl` → `dsl2stan`).
 - [`Docs/TODO.md`](Docs/TODO.md) — forward-looking list of possible future work/refinements to do.[](()
 - [`Docs/CLAUDE.md`](Docs/CLAUDE.md) — architecture notes (loaded by Claude Code sessions in this workspace).
+
+As the last item indicates, the ulam port is being worked on using Claude.

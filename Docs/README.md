@@ -62,7 +62,7 @@ This project is work in progress!!! Work completed or still to be done can be fo
 **Notes**
   
 1. As with building a Stan binary during `compile`, all commands only operate when the input file's modification timestamp is newer than the corresponding output timestamp. 
-2. Run `csv2json` preferably after a "<name>.stan" file has been set up. In that case the "<name>.data.json" file reflects what is needed. It also adds 'N', the number of observations.
+2. Run `csv2json` preferably after a "<name>.stan" file has been set up. In that case the "<name>.data.json" file reflects what is needed. It also adds items like 'N', the number of observations, and other needed data items such as 'N\_blocks'.
 
 
 
