@@ -22,13 +22,13 @@ This project is work in progress!!! Work completed or still to be done can be fo
 | stansummary  | Stansummary on a sampled model             |
 | optimize     | Optimize a compiled model                  |
 | pathfinder   | Pathfinder on a compiled model             |
-| laplace      | Laplace approximation on a compiled model  |
-| runinfo      | See note 5      |
+| laplace      | Laplace on a compiled model                |
+| runinfo      | See note 1                                 |
 | ------------ | ------------------------------------------ |
 ```
 **Notes**
 
-1. The option `runinfo` is currently not yet used in either pipeline. It parses the "<name>.output.config.json" file which is by default written during the `sample` step. A slightly simplified version is stored as "<name>.runinfo.json".
+1. The option `runinfo` parses the "<name>.output.config.json" file which is by default written during the `sample` step. A slightly simplified version is stored as "<name>.runinfo.json". Currently it is used by `stansummary` to obtain the number of chains created by `sample`.
 
  
 ### Ulam pipeline related commands
@@ -62,14 +62,14 @@ This project is work in progress!!! Work completed or still to be done can be fo
 
 **Notes**
   
-1. As with building a Stan binary during `compile`, all commands only operate when the input file's modification timestamp is newer than the corresponding output timestamp. 
-2. Run `csv2json` preferably after a "<name>.stan" file has been set up. In that case the "<name>.data.json" file reflects what is needed. It also adds items like 'N', the number of observations, and other needed data items such as 'N\_blocks'.
+1. As with building a Stan binary during `compile`, all commands only operate when the input file's modification timestamp is newer than the corresponding output file timestamp. 
+2. Run `csv2json` preferably after a "<name>.stan" file has been set up. In that case the "<name>.data.json" file reflects what is needed. It also adds items like 'N', the number of observations, and other needed data items such as 'N_blocks'.
 
 
 
 ## Prerequisites  
 
-This [repository](https://github.com/SwiftProjectOrganization/Stan) is an Xcode project. Some familiarity with running Xcode and Swift programs on MacOS is assumed. To edit documentation files, if not from within Xcode, I use [Clearly](https://clearly.md).
+This [repository](https://github.com/SwiftProjectOrganization/SwiftStan) is an Xcode project. Some familiarity with running Xcode and Swift programs on MacOS is assumed. To edit documentation files, if not from within Xcode, I use [Clearly](https://clearly.md).
 
 ### 1. Clone the repository  
 
@@ -110,7 +110,7 @@ Environment variables used by the pipeline:
 
   - `CMDSTAN` — location of the cmdstan installation (required for `compile`/`sample`).
   - `STAN_CASES` — case-root directory name under `~/Documents/`; defaults to `StanCases`.
-  - `SWIFTSTAN_PROJECT_ROOT` — location of the SwiftStan source checkout, used by the DSL pipeline's `dsl2stan` to compile the smoke driver against the project's `Ulam/` sources. When unset it defaults to `/Users/rob/Projects/Swift/SwiftStan` and `dsl2stan` prints a notice that the default is being used. Set it if your checkout lives elsewhere.
+  - `SWIFTSTAN_PROJECT_ROOT` — location of the SwiftStan source checkout, used by the DSL pipeline's `dsl2stan` to compile a "smoke driver". It defaults to `/Users/rob/Projects/Swift/SwiftStan` and `dsl2stan` prints a notice that the default is being used.
 
 ### 3. Testing SwiftStan
 
@@ -120,12 +120,12 @@ After finishing the setup steps, in a (MacOS or other) Terminal:
 
 2. Enter `swift test`.
 
-To run individual tests, use `swift test --filter "chimpanzeesHappyPath()"`.
+To run individual tests, use for example `swift test --filter "chimpanzeesHappyPath()"`.
 
 
 ## Working environment  
 
-After the initial build, the intended usage is to run the commands from a shell. This requires the exported alias in that shell as setup above. It's not always necessary, but advisable, to run `swifstan ...` from the SwiftStan directory.
+After the initial build, the intended usage is to run the commands from a shell. This requires the exported alias in a shell as setup above. It's not always necessary, but advisable, to run `swifstan ...` from the SwiftStan directory.
 
 The above commands can also be run from within Xcode by specifying input arguments before hitting the `'build and run'` button. See below "Usage from within Xcode".  
 
@@ -137,9 +137,9 @@ The <STAN_CASES> enviroment variable specifies the actual location, by default t
 
 The cmdstan pipeline only uses files in `"~/Documents/<STAN_CASES>/name>/Results"`. All cmdstan output files also end up in Results.
 
-The ulam pipeline looks for files in `"~/Documents/<STAN_CASES>/<name>/Preliminaries"`.
+The ulam pipeline looks either for files in `"~/Documents/<STAN_CASES>/<name>/Preliminaries"`, or, in case of the command `stan2alist`, for a `"<name>.stan"` file in `"<name>/Results"`.
 
-Produced files end up in either Preliminaries (`"<Name>.ulam.swift"`) or in Results ( `"<name>.stan"` and `"<name>.data.json"`.
+Produced files end up in either Preliminaries (`"<Name>.ulam.swift"` and `"<name>.alist.r"`) or in Results (`"<name>.stan"` and `"<name>.data.json"`).
 
 
 ### Files read when using the pipelines
@@ -147,21 +147,15 @@ Produced files end up in either Preliminaries (`"<Name>.ulam.swift"`) or in Resu
 In `"~/Documents/<STAN_CASES>/<name>/Preliminaries"` 3 files can be present:
 
     1. `"<name>.csv"`: A .csv file containing the data for the <name>.
-    2. `"<name>.alist.R"`: A .R fragment containing an R alist as used in `'rethinking'`.
+    2. `"<name>.alist.r"`: A .r fragment containing an R alist as used in `'rethinking'`.
     3. `"<Name>.ulam.swift"`: Intermediate file for debugging or handcoding Ulam DSL.
-    
-    If there is an `"<name>.csv"` file, the command `'csv2json'` will create a `"<name>.data.json"` file in the Results subdirectory for <name>.
-    
-    If there is a `"<name>.alist.R"` file, the command `'stancode'` will create a `"Results/<name>.stan"` file.
-    
-    Another option is to use the `'ulam'` command. This pipeline is useful for debugging and compiling hand generated smoke files (see below Ulam DSL).
 
 In `"~/Documents/<STAN_CASES>/<name>/Results"` at least 2 files must be present before the cmdstan pipeline can be used:
 
     1. `"<name>.data.json"`: If data is needed for the model.
     2. `"<name>.stan"`: Stan language program.
     
-    Using the cmdstan pipeline many other files can and will be generated in the Results subdirectory.
+See the examples in UlamManual.md and DSLManual.md for details.
 
             
 ### Per-invocation logs
@@ -240,14 +234,14 @@ rob@Rob-Travel-M5 ~ %
 
 If the appropriate files are present, a typical Terminal session could continue with:
 
-1. `'swiftstan compile --model=bernoulli'`
-2. `'swiftstan sample --model=bernoulli'`
+1. `'swiftstan compile --model bernoulli'`
+2. `'swiftstan sample --mode lbernoulli'`
 
 or
 
-3. `'swiftstan ulam --model=chimpanzees'`
+3. `'swiftstan ulam --mode lchimpanzees'`
 
-    The `'ulam'` pipeline uses Swift to first create an intermediate `'Ulam smoke driver'` which takes roughly 6 seconds longer. But I do like the option to generate Ulam DSL where the structure of the Stan model is clearly labeled and the input data file checked.
+    The `alist2dsl` command uses Swift to first create an intermediate `'Ulam smoke driver'` which takes roughly 6 seconds longer. But I do like the option to generate the DSL where the structure of the Stan model is clearly labeled and the input data file checked.
 
 ### Usage from within Xcode
 
@@ -263,80 +257,12 @@ In the SwiftStan directory:
 2. `swiftstan sample -I`
 
 
-## Ulam DSL
-
-The package includes a Swift port of Richard McElreath's R `ulam()` (from the `rethinking` package).
-
-Instead of writing `.stan` source by hand, you can:
-
-    1. use the `'alist2stan'` command to directly translate a `"<name>/Preliminaries/<name>.alist.R"` to an `"<name>/Results/<model.stan"` file
-
-    2. define the model with a Swift result-builder DSL; the generator emits both `"<name>.stan"` and `"<name>.data.json"` under `"<name>/Results/"` and then hands off to the existing `compile` and `sample` pipeline steps.
-
-The ulam pipeline is split into sub-commands:
-
-    1. `alist2stan` (R "alist" → .stan file)
-    2. `alist2dsl` (R "alist" → Swift smoke driver) 
-    3. `dsl2stan` (Swift smoke driver → ".stan")
-    
-    and
-    
-    4. `csv2json` (CSV → `.data.json`), then `ulam` chains them with `compile` + `sample`.
-
-
-Canonical Statistical Rethinking opening example — Bernoulli + logit as a smoke file:
-
-```swift
-import Foundation
-import SwiftStan
-
-let data: UlamData = [
-  "y": .integer([0, 1, 0, 1, 1, 0, 1, 1, 1, 0]),
-  "x": .real([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]),
-]
-
-let model = UlamModel(data: data) {
-  Likelihood("y", .bernoulli(p: "p"))
-  Link(.logit, lhs: "p", rhs: "a + b*x")
-  Prior("a", .normal(0, 1.5))
-  Prior("b", .normal(0, 0.5))
-}
-
-let result = ulam(model,
-                  directory: "StanCases",
-                  name: "Bernoulli",
-                  cmdstan: cmdstan)
-```
-
-The generated `Bernoulli.stan` is:
-
-```stan
-// Generated by Stan ulam port (DSL → Stan source).
-data {
-  int<lower=1> N;
-  vector[N] x;
-  array[N] int<lower=0, upper=1> y;
-}
-parameters {
-  real a;
-  real b;
-}
-model {
-  vector[N] p;
-  p = inv_logit(a + b*x);
-  a ~ normal(0, 1.5);
-  b ~ normal(0, 0.5);
-  y ~ bernoulli(p);
-}
-```
-
-The built-in demo is wired to the `'ulam'` subcommand — run `'stan ulam -V'` to compile and sample the example end-to-end. For a generator-only check (no cmdstan), the public `stancode(_:)` function returns the source as a string.
-
 
 ## Additional project documentation
 
 - [`CLAUDE.md`](CLAUDE.md) — architecture notes for the `Stan` Swift package (Commands / Methods / Support layering, the `(String, String)` return convention, the Ulam module layout, etc.). Loaded by Claude Code sessions in this workspace.
 - [`TODO.md`](TODO.md) — forward-looking punch list for topics beyond v1.5 scope (SUR, LKJ-Cholesky, post-sampling helpers, etc.).
+
 
 
 ## References

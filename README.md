@@ -4,7 +4,7 @@
 
 2. An experimental port of [McElreath](https://www.routledge.com/Statistical-Rethinking-A-Bayesian-Course-with-Examples-in-R-and-STAN/McElreath/p/book/9780367139919)'s R implementation ulam() in [rethinking](https://github.com/rmcelreath/rethinking) to Swift.
 
-3. As an "experiment within an experiment", and for me to further my understanding of the mapping back-and-forth between alternate ways of expressing Stan Language Programs, I asked Claude to plan and implement a reverse mapping from a .stan file to a .alist.r file. See sections 2.2 and 5.2.
+3. As an "experiment within an experiment", and for me to further my understanding of the mapping back-and-forth between alternate ways of expressing Stan Language Programs, I asked Claude to plan and implement a reverse mapping from a .stan file to an .alist.r file. See sections 2.2 and 5.2 in Docs/UlamManual.md.
 
 Documentation lives in [`Docs/`](Docs/):
 
