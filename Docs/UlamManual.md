@@ -1808,21 +1808,66 @@ mu_alpha, sigma_alpha ~ ...                      (hyper-parameters)
 
 Estimating `mu_alpha` and `sigma_alpha` from the data lets information *flow between
 counties*: data-poor counties are shrunk toward the overall mean `mu_alpha`, while
-data-rich counties stay close to their own estimate. This is the advanced theme of the
-chapter — but it is also the natural setting for the **reverse** direction of the
-pipeline (`stan2alist`, §5.2.6), because the idiomatic hand-written Stan for this model
-reaches for two features the generator does not emit: an `offset`/`multiplier`
-non-centred parameter and a `generated quantities` posterior-predictive block.
+data-rich counties stay close to their own estimate.
 
-#### 5.2.2 The `Preliminaries` directory and `stancode`
+Rather than hand-write the `alist()` for this model, this section starts from the other
+end. A Stan programmer would naturally write this model in idiomatic Stan — reaching for
+two features the generator does not emit: an `offset`/`multiplier` non-centred parameter
+and a `generated quantities` posterior-predictive block. We take exactly such a
+hand-written file, run it **backwards** through `stan2alist` (§2) to recover an editable
+`alist()`, copy that into the `radon_pp` case, and then drive it **forwards** through the
+usual `stancode → compile → csv2json → sample` pipeline. The forward Stan that results is
+byte-for-byte the centred model — demonstrating the `stan → stan2alist → stancode`
+round-trip end-to-end.
+
+#### 5.2.2 The idiomatic Stan template, and recovering its alist with `stan2alist`
+
+The `radon_pp_template` example ships a hand-written, idiomatic Stan file (and no
+`.alist.R` — that is what we are about to generate). `Results/radon_pp_template.stan`:
+
+```stan
+data {
+  int<lower=1> N;  // observations
+  int<lower=1> N_county;
+  array[N] int<lower=1, upper=N_county> county;
+  vector[N] floor;
+  vector[N] log_radon;
+}
+parameters {
+  real mu_alpha;
+  real<lower=0> sigma_alpha;
+  vector<offset=mu_alpha, multiplier=sigma_alpha>[N_county] alpha;
+  real beta;
+  real<lower=0> sigma;
+}
+model {
+  log_radon ~ normal(alpha[county] + beta * floor, sigma);
+  alpha ~ normal(mu_alpha, sigma_alpha); // partial-pooling
+  beta ~ normal(0, 10);
+  sigma ~ normal(0, 10);
+  mu_alpha ~ normal(0, 10);
+  sigma_alpha ~ normal(0, 10);
+}
+generated quantities {
+  array[N] real y_rep = normal_rng(alpha[county] + beta * floor, sigma);
+}
+```
+
+The `offset`/`multiplier` declaration is a **non-centred** parameterisation (it samples
+the funnel geometry of `alpha`/`sigma_alpha` more cleanly), and the `generated
+quantities` block draws posterior-predictive replicates `y_rep`. Run the reverse
+pipeline to recover an editable `alist()` from it:
+
+```bash
+swiftstan stan2alist --model radon_pp_template
+```
 
 ```
-~/Documents/StanCases/radon_pp/Preliminaries/
-├── radon_pp.alist.R
-└── radon_pp.csv
+stan2alist: warning: dropped Stan block 'generated quantities' — no alist representation; not translated
+→ Wrote /Users/rob/Documents/StanCases/radon_pp_template/Preliminaries/radon_pp_template.alist.R
 ```
 
-The model description, `radon_pp.alist.R`:
+The recovered `Preliminaries/radon_pp_template.alist.R`:
 
 ```r
 alist(
@@ -1835,12 +1880,46 @@ alist(
 )
 ```
 
-The single change from the no-pooling §4.1 alist is the second line: where §4.1 wrote
-`alpha[county] ~ dnorm(0, 10)` (a fixed prior), here the prior's parameters are the
-*free* variables `mu_alpha` and `sigma_alpha`, which then get their own priors. That
-one substitution is what turns independent intercepts into partially-pooled ones.
+The two Stan features the template adds carry no `alist()` form and are deliberately
+reduced on the way back:
 
-Generate the Stan source:
+- The `vector<offset=mu_alpha, multiplier=sigma_alpha>[N_county] alpha;` non-centred
+  declaration is **stripped to the centred form**. The non-centred and centred
+  parameterisations are statistically equivalent, and `stancode` only emits the centred
+  one, so dropping the affine transform is exactly what makes the round-trip consistent.
+- The `generated quantities` block has **no `alist()` form and is dropped with the
+  stderr warning** shown above — `alist()` describes the model, not derived posterior
+  quantities.
+
+(`stan2alist` refuses to overwrite an existing `.alist.R` unless `--force` is given; the
+`radon_pp_template` example ships without one, so the command runs clean.)
+
+#### 5.2.3 Seeding the `radon_pp` case
+
+The recovered alist *is* the partial-pooling model in McElreath form. Copy it into the
+`radon_pp` case, renaming it to match:
+
+```bash
+cp ~/Documents/StanCases/radon_pp_template/Preliminaries/radon_pp_template.alist.R \
+   ~/Documents/StanCases/radon_pp/Preliminaries/radon_pp.alist.R
+```
+
+`radon_pp/Preliminaries/` now holds the inputs the forward pipeline needs:
+
+```
+~/Documents/StanCases/radon_pp/Preliminaries/
+├── radon_pp.alist.R
+└── radon_pp.csv
+```
+
+`radon_pp.csv` is the same full radon dataset used in §4.1; the model references
+`county`, `floor`, and `log_radon`. Compared with the no-pooling §4.1 alist, the only
+change is the second line: where §4.1 wrote `alpha[county] ~ dnorm(0, 10)` (a fixed
+prior), here the prior's parameters are the *free* variables `mu_alpha` and
+`sigma_alpha`, which then get their own priors — the substitution that turns independent
+intercepts into partially-pooled ones.
+
+#### 5.2.4 Generating Stan with `stancode`
 
 ```bash
 swiftstan stancode --model radon_pp
@@ -1882,10 +1961,14 @@ The varying intercept `alpha` is a `vector[N_county]`, exactly as in §4.1, but 
 prior `alpha ~ normal(mu_alpha, sigma_alpha)` now references two free parameters. Both
 standard-deviation hyper-parameters (`sigma`, `sigma_alpha`) carry the `<lower=0>`
 constraint and the half-normal `T[0, ]` truncation the classifier derives from their
-positivity. This is the **centred** parameterisation; §5.2.6 shows the hand-tuned
-non-centred alternative.
+positivity.
 
-#### 5.2.3 Running `compile`
+This is the **centred** parameterisation — and that closes the loop opened in §5.2.2:
+the hand-written `radon_pp_template.stan` was non-centred, `stan2alist` reduced it to the
+centred alist, and `stancode` here regenerates the centred Stan. `stan → stan2alist →
+stancode` round-trips for this vectorising model.
+
+#### 5.2.5 Running `compile`
 
 ```bash
 swiftstan compile --model radon_pp
@@ -1897,10 +1980,7 @@ swiftstan compile --model radon_pp
 
 Writes the `radon_pp` binary and the compile logs into `Results/`, as in §3.1.3.
 
-#### 5.2.4 Preparing the data with `csv2json`
-
-`radon_pp.csv` is the same full radon dataset used in §4.1; the model references
-`county`, `floor`, and `log_radon`.
+#### 5.2.6 Preparing the data with `csv2json`
 
 ```bash
 swiftstan csv2json --model radon_pp
@@ -1923,7 +2003,7 @@ matching cardinality is emitted:
 }
 ```
 
-#### 5.2.5 Sampling with `sample` (and `stansummary`)
+#### 5.2.7 Sampling with `sample` (and `stansummary`)
 
 ```bash
 swiftstan sample --model radon_pp
@@ -1977,84 +2057,6 @@ name,mean,mcse,stddev,mad,p05,p50,p95,ess_bulk,ess_tail,ess_bulk_per_s,R_hat
 
 After sampling, `Results/` mirrors the radon layout (§3.1.5), with `radon_pp.*`
 filenames.
-
-#### 5.2.6 The idiomatic Stan version and `stan2alist`
-
-A Stan programmer writing this model by hand would not use the centred form the
-generator emits in §5.2.2. They would reach for a **non-centred** parameterisation
-(which samples the funnel geometry of `alpha`/`sigma_alpha` more cleanly) and add a
-`generated quantities` block to draw posterior-predictive replicates `y_rep`. The
-`radon_pp_template` example ships exactly such a file —
-`Results/radon_pp_template.stan`:
-
-```stan
-data {
-  int<lower=1> N;  // observations
-  int<lower=1> N_county;
-  array[N] int<lower=1, upper=N_county> county;
-  vector[N] floor;
-  vector[N] log_radon;
-}
-parameters {
-  real mu_alpha;
-  real<lower=0> sigma_alpha;
-  vector<offset=mu_alpha, multiplier=sigma_alpha>[N_county] alpha;
-  real beta;
-  real<lower=0> sigma;
-}
-model {
-  log_radon ~ normal(alpha[county] + beta * floor, sigma);
-  alpha ~ normal(mu_alpha, sigma_alpha); // partial-pooling
-  beta ~ normal(0, 10);
-  sigma ~ normal(0, 10);
-  mu_alpha ~ normal(0, 10);
-  sigma_alpha ~ normal(0, 10);
-}
-generated quantities {
-  array[N] real y_rep = normal_rng(alpha[county] + beta * floor, sigma);
-}
-```
-
-This is a useful test of the **reverse** pipeline. `stan2alist` (introduced in §2)
-reads a Stan file and reconstructs an editable McElreath `alist()`:
-
-```bash
-swiftstan stan2alist --model radon_pp_template
-```
-
-```
-→ Wrote /Users/rob/Documents/StanCases/radon_pp_template/Preliminaries/radon_pp_template.alist.R
-```
-
-The recovered `Preliminaries/radon_pp_template.alist.R`:
-
-```r
-alist(
-  log_radon ~ dnorm(alpha[county] + beta * floor, sigma),
-  alpha[county] ~ dnorm(mu_alpha, sigma_alpha),
-  beta ~ dnorm(0, 10),
-  sigma ~ dnorm(0, 10),
-  mu_alpha ~ dnorm(0, 10),
-  sigma_alpha ~ dnorm(0, 10)
-)
-```
-
-That is — up to formatting — the same `alist()` we hand-wrote in §5.2.2, which is the
-point: the two Stan features the template adds carry no `alist()` form and are
-deliberately reduced on the way back.
-
-- The `vector<offset=mu_alpha, multiplier=sigma_alpha>[N_county] alpha;` non-centred
-  declaration is **stripped to the centred form**. The non-centred and centred
-  parameterisations are statistically equivalent, and `stancode` only emits the centred
-  one, so dropping the affine transform is exactly what makes the round-trip consistent.
-- The `generated quantities` block has **no `alist()` form and is dropped with a
-  stderr warning** — `alist()` describes the model, not derived posterior quantities.
-
-So feeding the recovered alist back through `stancode` reproduces the centred
-`radon_pp.stan` of §5.2.2 byte-for-byte: `stan → stan2alist → stancode` round-trips for
-this vectorising model. (`stan2alist` refuses to overwrite an existing `.alist.R`
-unless `--force` is given; the `radon_pp_template` example ships without one so the
-command runs clean.)
 
 ---
 
